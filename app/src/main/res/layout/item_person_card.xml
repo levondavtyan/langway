@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginStart="16dp"
+    android:layout_marginEnd="16dp"
+    android:layout_marginBottom="12dp"
+    app:cardBackgroundColor="@color/surface"
+    app:cardCornerRadius="20dp"
+    app:cardElevation="4dp"
+    app:cardUseCompatPadding="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:minHeight="120dp">
+
+        <!-- LEFT: avatar panel with gradient background -->
+        <FrameLayout
+            android:id="@+id/person_avatar_panel"
+            android:layout_width="100dp"
+            android:layout_height="match_parent"
+            android:background="@drawable/bg_avatar_panel">
+
+            <!-- Initials circle -->
+            <TextView
+                android:id="@+id/person_initials"
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:layout_gravity="center"
+                android:background="@drawable/bg_initials_circle"
+                android:gravity="center"
+                android:textColor="@color/white"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+
+            <!-- Language flag badge bottom-right of panel -->
+            <TextView
+                android:id="@+id/person_flag"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_gravity="bottom|end"
+                android:layout_margin="8dp"
+                android:background="@drawable/bg_flag_badge"
+                android:gravity="center"
+                android:textSize="16sp" />
+
+        </FrameLayout>
+
+        <!-- RIGHT: info panel -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:padding="14dp">
+
+            <!-- Name + online dot -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:id="@+id/person_name"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:textColor="@color/text_primary"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:maxLines="1"
+                    android:ellipsize="end" />
+
+                <View
+                    android:id="@+id/person_online_dot"
+                    android:layout_width="8dp"
+                    android:layout_height="8dp"
+                    android:background="@drawable/bg_online_dot"
+                    android:layout_marginStart="6dp"
+                    android:visibility="gone" />
+
+            </LinearLayout>
+
+            <!-- Native + learning languages -->
+            <TextView
+                android:id="@+id/person_languages"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:textColor="@color/brand_green_dark"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <!-- Bio -->
+            <TextView
+                android:id="@+id/person_bio"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp"
+                android:lineSpacingMultiplier="1.35"
+                android:maxLines="2"
+                android:ellipsize="end" />
+
+            <!-- Hobby chips row -->
+            <com.google.android.material.chip.ChipGroup
+                android:id="@+id/person_hobby_chips"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                app:chipSpacing="4dp"
+                app:singleLine="true" />
+
+            <!-- Start chatting button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/person_chat_btn"
+                style="@style/Widget.Langway.Button"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:layout_marginTop="10dp"
+                android:minHeight="0dp"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:text="Start chatting"
+                android:textSize="12sp"
+                android:insetTop="0dp"
+                android:insetBottom="0dp" />
+
+        </LinearLayout>
+    </LinearLayout>
+</androidx.cardview.widget.CardView>

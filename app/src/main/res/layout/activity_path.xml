@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background">
+
+    <!-- Gradient header (same DNA as registration) -->
+    <FrameLayout
+        android:id="@+id/path_header"
+        android:layout_width="0dp"
+        android:layout_height="220dp"
+        android:background="@drawable/bg_header_gradient"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|start"
+            android:orientation="vertical"
+            android:paddingStart="24dp"
+            android:paddingEnd="24dp"
+            android:paddingBottom="52dp">
+
+            <TextView
+                android:id="@+id/path_greeting"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Your Learning Path"
+                android:textColor="#CCFFFFFF"
+                android:textSize="13sp"
+                android:letterSpacing="0.08"
+                android:textAllCaps="true" />
+
+            <TextView
+                android:id="@+id/path_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Tailored just for you"
+                android:textColor="@color/white"
+                android:textSize="26sp"
+                android:textStyle="bold"
+                android:layout_marginTop="2dp" />
+
+        </LinearLayout>
+    </FrameLayout>
+
+    <!-- Floating card that overlaps the header -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/path_summary_card"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="20dp"
+        android:layout_marginEnd="20dp"
+        android:translationY="-28dp"
+        app:cardBackgroundColor="@color/surface"
+        app:cardCornerRadius="20dp"
+        app:cardElevation="8dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/path_header">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp"
+            android:paddingTop="16dp"
+            android:paddingBottom="16dp">
+
+            <TextView
+                android:id="@+id/path_summary_text"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Based on your interests, we've built a personalised path across your chosen languages."
+                android:textColor="@color/text_secondary"
+                android:textSize="13sp"
+                android:lineSpacingMultiplier="1.4" />
+
+            <!-- Hobby tags row (filled programmatically) -->
+            <com.google.android.material.chip.ChipGroup
+                android:id="@+id/path_hobby_chips"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                app:chipSpacing="6dp"
+                app:singleLine="false" />
+
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
+    <!-- Scrollable list of path cards -->
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/path_scroll"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:clipToPadding="false"
+        app:layout_constraintBottom_toTopOf="@id/path_start_btn"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/path_summary_card">
+
+        <LinearLayout
+            android:id="@+id/path_cards_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="16dp"
+            android:clipToPadding="false" />
+
+    </androidx.core.widget.NestedScrollView>
+
+    <!-- "Let's Go" button pinned at bottom -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/path_start_btn"
+        style="@style/Widget.Langway.Button"
+        android:layout_width="0dp"
+        android:layout_height="@dimen/button_height"
+        android:layout_marginStart="20dp"
+        android:layout_marginEnd="20dp"
+        android:layout_marginBottom="20dp"
+        android:text="Let's Go →"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

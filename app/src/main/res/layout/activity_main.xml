@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background"
+    tools:context=".MainActivity">
+
+    <!-- ── Gradient header ── -->
+    <FrameLayout
+        android:id="@+id/header"
+        android:layout_width="0dp"
+        android:layout_height="@dimen/header_height"
+        android:background="@drawable/bg_header_gradient"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <TextView
+            android:id="@+id/header_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|start"
+            android:layout_marginStart="24dp"
+            android:layout_marginBottom="44dp"
+            android:text="@string/header_title"
+            android:textColor="@color/white"
+            android:textSize="28sp"
+            android:textStyle="bold"
+            android:alpha="0" />
+
+    </FrameLayout>
+
+    <!-- ── Floating step-card that overlaps the header ── -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/action_bar"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="20dp"
+        android:layout_marginEnd="20dp"
+        android:translationY="-32dp"
+        app:cardBackgroundColor="@color/surface"
+        app:cardCornerRadius="20dp"
+        app:cardElevation="8dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/header">
+
+        <TextView
+            android:id="@+id/action_bar_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:padding="18dp"
+            android:text="@string/action_bar_title"
+            android:textColor="@color/text_primary"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+    </androidx.cardview.widget.CardView>
+
+    <!-- ── Fragment container ── -->
+    <FrameLayout
+        android:id="@+id/frame"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintBottom_toTopOf="@+id/tool_bar"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/action_bar" />
+
+    <!-- ── Bottom navigation bar ── -->
+    <LinearLayout
+        android:id="@+id/tool_bar"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:minHeight="@dimen/toolbar_height"
+        android:background="@color/surface"
+        android:elevation="8dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/back_button"
+            style="@style/Widget.Langway.Button.Secondary"
+            android:layout_width="0dp"
+            android:layout_height="@dimen/button_height"
+            android:layout_weight="1"
+            android:layout_marginEnd="8dp"
+            android:enabled="false"
+            android:text="@string/back_button_text" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/next_button"
+            style="@style/Widget.Langway.Button"
+            android:layout_width="0dp"
+            android:layout_height="@dimen/button_height"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:text="@string/next_button_text" />
+
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

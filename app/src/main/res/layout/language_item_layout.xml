@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="10dp"
+    android:background="@drawable/bg_language_item"
+    android:paddingStart="16dp"
+    android:paddingTop="12dp"
+    android:paddingEnd="12dp"
+    android:paddingBottom="12dp">
+
+    <!-- Colour accent bar on the left -->
+    <View
+        android:id="@+id/accent_bar"
+        android:layout_width="4dp"
+        android:layout_height="0dp"
+        android:background="@color/brand_green"
+        android:layout_marginEnd="14dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <LinearLayout
+        android:id="@+id/text_block"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="4dp"
+        android:orientation="vertical"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toStartOf="@+id/remove_button"
+        app:layout_constraintStart_toEndOf="@+id/accent_bar"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <TextView
+            android:id="@+id/language_name"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/text_primary"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/language_proficiency"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:textColor="@color/text_secondary"
+            android:textSize="13sp" />
+
+    </LinearLayout>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/remove_button"
+        style="@style/Widget.Langway.Button.Danger"
+        android:layout_width="wrap_content"
+        android:layout_height="40dp"
+        android:text="@string/remove_button_text"
+        android:textSize="13sp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

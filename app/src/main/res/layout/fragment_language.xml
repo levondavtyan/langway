@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.core.widget.NestedScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background"
+    android:fillViewport="true"
+    android:clipToPadding="false"
+    tools:context=".LanguageFragment">
+
+    <!--
+        clipToPadding="false" on both this ScrollView and the inner LinearLayout
+        lets CardView's elevation shadow render fully on all four sides instead
+        of being clipped at the edges.
+    -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:clipToPadding="false"
+        android:paddingStart="4dp"
+        android:paddingEnd="4dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="24dp">
+
+        <!-- ── Picker card — horizontal margin gives shadow room on left/right ── -->
+        <androidx.cardview.widget.CardView
+            android:id="@+id/constraintLayout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:layout_marginStart="2dp"
+            android:layout_marginEnd="2dp"
+            app:cardBackgroundColor="@color/surface"
+            app:cardCornerRadius="@dimen/card_corner_radius"
+            app:cardElevation="6dp"
+            app:cardUseCompatPadding="true">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Language"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp"
+                    android:layout_marginBottom="4dp" />
+
+                <Spinner
+                    android:id="@+id/language_spinner"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:background="@drawable/bg_spinner"
+                    android:paddingStart="14dp"
+                    android:paddingEnd="14dp"
+                    android:popupBackground="@color/surface"
+                    android:spinnerMode="dialog" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Proficiency Level"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp"
+                    android:layout_marginTop="14dp"
+                    android:layout_marginBottom="4dp" />
+
+                <Spinner
+                    android:id="@+id/proficiency_spinner"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:background="@drawable/bg_spinner"
+                    android:paddingStart="14dp"
+                    android:paddingEnd="14dp"
+                    android:popupBackground="@color/surface"
+                    android:spinnerMode="dialog" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/add_button"
+                    style="@style/Widget.Langway.Button"
+                    android:layout_width="match_parent"
+                    android:layout_height="@dimen/button_height"
+                    android:layout_marginTop="16dp"
+                    android:text="@string/add_button_text"
+                    app:icon="@android:drawable/ic_input_add"
+                    app:iconGravity="textStart"
+                    app:iconPadding="6dp" />
+
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- "Added languages" label -->
+        <TextView
+            android:id="@+id/added_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:layout_marginStart="6dp"
+            android:text="Added languages"
+            android:textColor="@color/text_secondary"
+            android:textSize="13sp"
+            android:alpha="0" />
+
+        <!--
+            Items are inflated into this container by LanguageFragment.rebuildList().
+            Each item has layout_marginBottom set in language_item_layout.xml for spacing.
+            clipToPadding="false" lets item card shadows show fully.
+        -->
+        <LinearLayout
+            android:id="@+id/languages_list_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:clipToPadding="false"
+            android:layout_marginTop="6dp"
+            android:paddingStart="2dp"
+            android:paddingEnd="2dp"
+            android:paddingBottom="4dp" />
+
+    </LinearLayout>
+</androidx.core.widget.NestedScrollView>

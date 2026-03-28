@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.core.widget.NestedScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:clipChildren="false"
+        android:clipToPadding="false"
+        android:paddingBottom="32dp">
+
+        <!-- Gradient header -->
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="140dp"
+            android:background="@drawable/bg_header_gradient">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|start"
+                android:layout_marginStart="24dp"
+                android:layout_marginBottom="20dp"
+                android:text="Profile"
+                android:textColor="@color/white"
+                android:textSize="24sp"
+                android:textStyle="bold" />
+        </FrameLayout>
+
+        <!-- Name + email card — overlaps header -->
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_marginEnd="16dp"
+            android:layout_marginTop="-20dp"
+            android:layout_marginBottom="4dp"
+            app:cardBackgroundColor="@color/surface"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="6dp"
+            app:cardUseCompatPadding="true">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="20dp">
+
+                <TextView
+                    android:id="@+id/profile_name"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Your Name"
+                    android:textColor="@color/text_primary"
+                    android:textSize="22sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/profile_email"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="13sp" />
+
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- MY INTERESTS card -->
+        <androidx.cardview.widget.CardView
+            android:id="@+id/profile_hobbies_card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_marginEnd="16dp"
+            android:layout_marginTop="16dp"
+            android:visibility="gone"
+            app:cardBackgroundColor="@color/surface"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="4dp"
+            app:cardUseCompatPadding="true">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="MY INTERESTS"
+                    android:textColor="@color/text_hint"
+                    android:textSize="11sp"
+                    android:letterSpacing="0.1"
+                    android:textAllCaps="true"
+                    android:layout_marginBottom="10dp" />
+
+                <com.google.android.material.chip.ChipGroup
+                    android:id="@+id/profile_hobby_chips"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    app:chipSpacing="6dp"
+                    app:singleLine="false" />
+
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- MY LEARNING PATH label -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="22dp"
+            android:layout_marginTop="20dp"
+            android:layout_marginBottom="4dp"
+            android:text="MY LEARNING PATH"
+            android:textColor="@color/text_hint"
+            android:textSize="11sp"
+            android:letterSpacing="0.1"
+            android:textAllCaps="true" />
+
+        <!-- Path cards container -->
+        <LinearLayout
+            android:id="@+id/profile_path_cards"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:visibility="gone" />
+
+        <!-- Sign out button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/profile_sign_out_btn"
+            style="@style/Widget.Langway.Button.Secondary"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:layout_marginStart="16dp"
+            android:layout_marginEnd="16dp"
+            android:layout_marginTop="24dp"
+            android:text="Sign Out" />
+
+    </LinearLayout>
+</androidx.core.widget.NestedScrollView>

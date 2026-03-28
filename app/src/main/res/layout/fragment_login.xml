@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.core.widget.NestedScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background"
+    android:fillViewport="true"
+    tools:context=".ui.login.LoginFragment">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="@dimen/screen_padding"
+        android:paddingEnd="@dimen/screen_padding"
+        android:paddingTop="16dp"
+        android:paddingBottom="24dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Let's get you set up"
+            android:textColor="@color/text_secondary"
+            android:textSize="14sp"
+            android:layout_marginBottom="20dp" />
+
+        <!-- Full Name -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/til_full_name"
+            style="@style/Widget.Langway.TextInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/prompt_full_name"
+            app:startIconDrawable="@android:drawable/ic_menu_my_calendar"
+            app:startIconTint="@color/brand_green">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/full_name"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:inputType="textPersonName|textCapWords"
+                android:selectAllOnFocus="true"
+                android:textColor="@color/text_primary" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <!-- Email -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/til_email"
+            style="@style/Widget.Langway.TextInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:hint="@string/prompt_email"
+            app:startIconDrawable="@android:drawable/ic_dialog_email"
+            app:startIconTint="@color/brand_green">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/email"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:inputType="textEmailAddress"
+                android:selectAllOnFocus="true"
+                android:textColor="@color/text_primary" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <!-- Password -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/til_password"
+            style="@style/Widget.Langway.TextInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:hint="@string/prompt_password"
+            app:passwordToggleEnabled="true"
+            app:startIconDrawable="@android:drawable/ic_lock_lock"
+            app:startIconTint="@color/brand_green">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/password"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:inputType="textPassword"
+                android:selectAllOnFocus="true"
+                android:textColor="@color/text_primary" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <!-- Confirm Password -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/til_confirm_password"
+            style="@style/Widget.Langway.TextInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:hint="Confirm password"
+            app:passwordToggleEnabled="true"
+            app:startIconDrawable="@android:drawable/ic_lock_lock"
+            app:startIconTint="@color/brand_green">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/confirm_password"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:imeOptions="actionDone"
+                android:inputType="textPassword"
+                android:selectAllOnFocus="true"
+                android:textColor="@color/text_primary" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <!-- Sign in link -->
+        <TextView
+            android:id="@+id/sign_in_link"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:text="Already have an account? Sign in"
+            android:textColor="@color/brand_blue"
+            android:textSize="14sp"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <com.google.android.material.progressindicator.CircularProgressIndicator
+            android:id="@+id/loading"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="24dp"
+            android:visibility="gone"
+            app:indicatorColor="@color/brand_green"
+            app:trackColor="@color/brand_green_light"
+            app:trackThickness="3dp" />
+
+    </LinearLayout>
+</androidx.core.widget.NestedScrollView>

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "927010780082",
+    "project_id": "langway-fc2c8",
+    "storage_bucket": "langway-fc2c8.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:927010780082:android:0bccf991be82d456952aab",
+        "android_client_info": {
+          "package_name": "com.levon.davtyan.langway"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCb1anK4xj4u3R-Ok-CyMuoheFuvsQ235w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

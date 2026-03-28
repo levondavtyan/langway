@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="fragment_horizontal_margin">20dp</dimen>
+    <dimen name="fragment_vertical_margin">20dp</dimen>
+    <dimen name="text_margin">16dp</dimen>
+
+    <dimen name="header_height">200dp</dimen>
+    <dimen name="header_overlap">48dp</dimen>
+
+    <dimen name="card_corner_radius">20dp</dimen>
+    <dimen name="button_corner_radius">14dp</dimen>
+    <dimen name="button_height">52dp</dimen>
+    <dimen name="input_corner_radius">14dp</dimen>
+    <dimen name="item_corner_radius">16dp</dimen>
+
+    <dimen name="spacing_xs">4dp</dimen>
+    <dimen name="spacing_sm">8dp</dimen>
+    <dimen name="spacing_md">16dp</dimen>
+    <dimen name="spacing_lg">24dp</dimen>
+    <dimen name="spacing_xl">32dp</dimen>
+
+    <dimen name="toolbar_height">68dp</dimen>
+    <dimen name="screen_padding">20dp</dimen>
+</resources>
