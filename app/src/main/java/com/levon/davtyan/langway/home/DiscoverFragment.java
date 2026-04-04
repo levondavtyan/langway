@@ -1,14 +1,18 @@
 package com.levon.davtyan.langway.home;
 
-import android.graphics.Color;
+import android.content.Intent;
+import android.util.Log;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.os.Bundle;
+import android.util.Base64;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.animation.DecelerateInterpolator;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -16,28 +20,31 @@ import androidx.fragment.app.Fragment;
 
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
+import com.google.firebase.Timestamp;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseAuth.AuthStateListener;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.QueryDocumentSnapshot;
+import com.levon.davtyan.langway.ChatActivity;
 import com.levon.davtyan.langway.R;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class DiscoverFragment extends Fragment {
 
-    // Hard colors — immune to dark-mode theming
-    private static final int CHIP_GREEN_BG    = 0xFFDFFAF3;
-    private static final int CHIP_GREEN_TEXT  = 0xFF00A87A;
-    private static final int CHIP_BLUE_BG     = 0xFFE3ECFF;
-    private static final int CHIP_BLUE_TEXT   = 0xFF1A56CC;
-    private static final int CHIP_SEL_BG      = 0xFF00C896;
-    private static final int CHIP_SEL_TEXT    = 0xFFFFFFFF;
-    private static final int CHIP_UNSEL_BG    = 0xFFFFFFFF;
-    private static final int CHIP_UNSEL_TEXT  = 0xFF0D2626;
-    private static final int CHIP_STROKE      = 0xFFB2DDD6;
+    private static final int CHIP_GREEN_BG   = 0xFFDFFAF3;
+    private static final int CHIP_GREEN_TEXT = 0xFF00A87A;
+    private static final int CHIP_SEL_BG    = 0xFF00C896;
+    private static final int CHIP_SEL_TEXT  = 0xFFFFFFFF;
+    private static final int CHIP_UNSEL_BG  = 0xFFFFFFFF;
+    private static final int CHIP_UNSEL_TEXT = 0xFF0D2626;
+    private static final int CHIP_STROKE    = 0xFFB2DDD6;
 
     private static final Map<String, String> FLAG_MAP = new HashMap<String, String>() {{
         put("English","🇬🇧"); put("Spanish","🇪🇸"); put("Russian","🇷🇺");
@@ -47,31 +54,32 @@ public class DiscoverFragment extends Fragment {
         put("Dutch","🇳🇱"); put("Swedish","🇸🇪"); put("Turkish","🇹🇷");
     }};
 
-    // Avatar background gradients — cycles through a palette per user
     private static final int[][] AVATAR_GRADIENTS = {
-            {0xFF00C896, 0xFF2979FF},
-            {0xFFFF6B6B, 0xFFFFD93D},
-            {0xFF6C63FF, 0xFF3EC6E0},
-            {0xFFFF8C42, 0xFFFF3CAC},
-            {0xFF43E97B, 0xFF38F9D7},
-            {0xFF667EEA, 0xFF764BA2},
+            {0xFF00C896, 0xFF2979FF}, {0xFFFF6B6B, 0xFFFFD93D},
+            {0xFF6C63FF, 0xFF3EC6E0}, {0xFFFF8C42, 0xFFFF3CAC},
+            {0xFF43E97B, 0xFF38F9D7}, {0xFF667EEA, 0xFF764BA2},
     };
 
-    private ChipGroup filterChips;
+    private ChipGroup    filterChips;
     private LinearLayout cardsContainer;
     private LinearLayout emptyState;
 
-    // All loaded users from Firestore
-    private final List<Map<String, Object>> allUsers = new ArrayList<>();
-    // Currently active filter label (null = show all)
+    // Loaded once, filtered on chip tap
+    private final List<Map<String, Object>> allMatches = new ArrayList<>();
     private String activeFilter = null;
+    private AuthStateListener authStateListener;
 
-    // Current user's data for building filters
+    // My profile data
+    private String       myUid       = "";
+    private String       myName      = "";
+    private String       myPhoto     = "";
+    private String       myLangStr   = "";
+    private Set<String>  myLangKeys  = new HashSet<>();
+    private Set<String>  myHobbyKeys = new HashSet<>();
+    private List<String> myLangPairs = new ArrayList<>();
     private List<String> myHobbies   = new ArrayList<>();
-    private List<String> myLanguages = new ArrayList<>(); // "Lang|Level"
 
-    @Nullable
-    @Override
+    @Nullable @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
                              @Nullable Bundle savedInstanceState) {
         return inflater.inflate(R.layout.fragment_discover, container, false);
@@ -80,73 +88,121 @@ public class DiscoverFragment extends Fragment {
     @Override
     public void onViewCreated(@NonNull View v, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(v, savedInstanceState);
-
         filterChips    = v.findViewById(R.id.discover_filter_chips);
         cardsContainer = v.findViewById(R.id.discover_cards_container);
         emptyState     = v.findViewById(R.id.discover_empty);
 
-        // Read current user's profile to build filters
-        Bundle args = getArguments();
-        if (args != null) {
-            ArrayList<String> h = args.getStringArrayList("hobbies");
-            ArrayList<String> l = args.getStringArrayList("languages");
-            if (h != null) myHobbies.addAll(h);
-            if (l != null) myLanguages.addAll(l);
-        }
+        // Use AuthStateListener so we wait for Firebase to restore the auth session
+        // before touching Firestore. Without this, getCurrentUser() can be null at
+        // fragment creation time even when the user IS logged in.
+        authStateListener = firebaseAuth -> {
+            if (!isAdded()) return;
+            if (firebaseAuth.getCurrentUser() == null) return; // not signed in yet
 
-        // Also load from Firestore in case args are absent (sign-in path)
-        String uid = FirebaseAuth.getInstance().getCurrentUser() != null
-                ? FirebaseAuth.getInstance().getCurrentUser().getUid() : null;
+            FirebaseAuth.getInstance().removeAuthStateListener(authStateListener);
+            myUid = firebaseAuth.getCurrentUser().getUid();
+            Log.d("LangwayDiscover", "AuthState ready, myUid=" + myUid);
 
-        if (uid != null) {
-            FirebaseFirestore.getInstance().collection("users").document(uid).get()
+            // Now load my own profile, then matching users
+            FirebaseFirestore.getInstance().collection("users").document(myUid).get()
                     .addOnSuccessListener(doc -> {
-                        if (!isAdded() || doc == null || !doc.exists()) {
-                            buildFiltersAndLoad();
-                            return;
-                        }
-                        if (myHobbies.isEmpty()) {
-                            List<?> h = (List<?>) doc.get("hobbies");
-                            if (h != null) for (Object o : h) myHobbies.add(o.toString());
-                        }
-                        if (myLanguages.isEmpty()) {
+                        if (!isAdded()) return;
+                        if (doc != null && doc.exists()) {
+                            myName  = str(doc.getData(), "displayName", "");
+                            myPhoto = str(doc.getData(), "photo", "");
+
                             Object langsObj = doc.get("languages");
                             if (langsObj instanceof Map) {
-                                for (Map.Entry<?, ?> e : ((Map<?, ?>) langsObj).entrySet())
-                                    myLanguages.add(e.getKey() + "|" + e.getValue());
+                                List<String> entries = new ArrayList<>();
+                                for (Map.Entry<?, ?> e : ((Map<?, ?>) langsObj).entrySet()) {
+                                    myLangKeys.add(e.getKey().toString());
+                                    myLangPairs.add(e.getKey() + "|" + e.getValue());
+                                    entries.add(FLAG_MAP.getOrDefault(e.getKey().toString(), "🌐")
+                                            + " " + e.getKey() + " · " + e.getValue());
+                                }
+                                myLangStr = android.text.TextUtils.join("  ", entries);
+                            }
+
+                            List<?> hobbiesList = (List<?>) doc.get("hobbies");
+                            if (hobbiesList != null) {
+                                for (Object h : hobbiesList) {
+                                    myHobbies.add(h.toString());
+                                    String key = h.toString();
+                                    if (key.contains(" ")) key = key.substring(key.indexOf(" ") + 1);
+                                    myHobbyKeys.add(key.toLowerCase());
+                                }
                             }
                         }
-                        buildFiltersAndLoad();
+                        loadMatchingUsers();
                     })
-                    .addOnFailureListener(e -> buildFiltersAndLoad());
-        } else {
-            buildFiltersAndLoad();
-        }
+                    .addOnFailureListener(e -> loadMatchingUsers());
+        };
+        FirebaseAuth.getInstance().addAuthStateListener(authStateListener);
     }
 
-    // ── Build filter chips from user's hobbies + languages, then load users ─
-    private void buildFiltersAndLoad() {
+    // ── Load all users, keep only those who share ≥1 language or hobby ───────
+    private void loadMatchingUsers() {
+        Log.d("LangwayDiscover", "loadMatchingUsers start, myLangKeys=" + myLangKeys + " myHobbyKeys=" + myHobbyKeys);
+        FirebaseFirestore.getInstance().collection("users").get()
+                .addOnSuccessListener(snapshot -> {
+                    if (!isAdded()) return;
+                    allMatches.clear();
+
+                    for (QueryDocumentSnapshot doc : snapshot) {
+                        if (doc.getId().equals(myUid)) continue;
+
+                        Map<String, Object> data = new HashMap<>(doc.getData());
+                        data.put("_uid", doc.getId());
+
+                        boolean matched = hasMatch(data);
+                        Log.d("LangwayDiscover", "User " + doc.getId() + " name=" + str(data,"displayName","?") + " langs=" + data.get("languages") + " hobbies=" + data.get("hobbies") + " → match=" + matched);
+                        if (matched) allMatches.add(data);
+                    }
+
+                    Log.d("LangwayDiscover", "Total matches: " + allMatches.size());
+                    buildFilters();
+                    renderCards(allMatches);
+                })
+                .addOnFailureListener(e -> {
+                    if (isAdded()) showEmpty();
+                });
+    }
+
+    /** Returns true if the other user shares at least one language or hobby with me. */
+    private boolean hasMatch(Map<String, Object> user) {
+        // Language overlap
+        Object langsObj = user.get("languages");
+        if (langsObj instanceof Map) {
+            for (Object key : ((Map<?, ?>) langsObj).keySet()) {
+                if (myLangKeys.contains(key.toString())) return true;
+            }
+        }
+        // Hobby overlap
+        List<?> hobbies = (List<?>) user.get("hobbies");
+        if (hobbies != null) {
+            for (Object h : hobbies) {
+                String key = h.toString();
+                if (key.contains(" ")) key = key.substring(key.indexOf(" ") + 1);
+                if (myHobbyKeys.contains(key.toLowerCase())) return true;
+            }
+        }
+        return false;
+    }
+
+    // ── Build filter chips ────────────────────────────────────────────────────
+    private void buildFilters() {
         if (!isAdded()) return;
-
         filterChips.removeAllViews();
-
-        // "All" chip first
         addFilterChip("All", true);
 
-        // Language filters — use the language name only
-        for (String pair : myLanguages) {
+        for (String pair : myLangPairs) {
             String lang = pair.split("\\|")[0];
-            String flag = FLAG_MAP.getOrDefault(lang, "🌐");
-            addFilterChip(flag + " " + lang, false);
+            addFilterChip(FLAG_MAP.getOrDefault(lang, "🌐") + " " + lang, false);
         }
-
-        // Hobby filters — strip emoji prefix
         for (String hobby : myHobbies) {
             String label = hobby.contains(" ") ? hobby.substring(hobby.indexOf(" ") + 1) : hobby;
             addFilterChip(label, false);
         }
-
-        loadUsersFromFirestore();
     }
 
     private void addFilterChip(String label, boolean selected) {
@@ -161,196 +217,203 @@ public class DiscoverFragment extends Fragment {
         chip.setChipStrokeWidth(1f);
         chip.setCheckedIconVisible(false);
         chip.setTextSize(13f);
-
         chip.setOnClickListener(v -> {
-            // Deselect all chips visually
             for (int i = 0; i < filterChips.getChildCount(); i++) {
                 Chip c = (Chip) filterChips.getChildAt(i);
-                c.setChecked(false);
                 c.setChipBackgroundColor(android.content.res.ColorStateList.valueOf(CHIP_UNSEL_BG));
                 c.setTextColor(CHIP_UNSEL_TEXT);
             }
-            // Select tapped chip
-            chip.setChecked(true);
             chip.setChipBackgroundColor(android.content.res.ColorStateList.valueOf(CHIP_SEL_BG));
             chip.setTextColor(CHIP_SEL_TEXT);
-
             activeFilter = label.equals("All") ? null : label;
-            renderCards();
+            applyFilter();
         });
-
         filterChips.addView(chip);
     }
 
-    // ── Load all other users from Firestore ──────────────────────────────────
-    private void loadUsersFromFirestore() {
-        String myUid = FirebaseAuth.getInstance().getCurrentUser() != null
-                ? FirebaseAuth.getInstance().getCurrentUser().getUid() : "";
-
-        FirebaseFirestore.getInstance().collection("users").get()
-                .addOnSuccessListener(snapshot -> {
-                    if (!isAdded()) return;
-                    allUsers.clear();
-                    for (QueryDocumentSnapshot doc : snapshot) {
-                        if (doc.getId().equals(myUid)) continue; // skip self
-                        allUsers.add(doc.getData());
-                    }
-                    renderCards();
-                })
-                .addOnFailureListener(e -> {
-                    if (!isAdded()) return;
-                    // Show placeholder cards if Firestore fails
-                    renderPlaceholders();
-                });
+    private void applyFilter() {
+        if (activeFilter == null) { renderCards(allMatches); return; }
+        List<Map<String, Object>> filtered = new ArrayList<>();
+        for (Map<String, Object> user : allMatches) {
+            if (matchesChip(user, activeFilter)) filtered.add(user);
+        }
+        renderCards(filtered);
     }
 
-    // ── Render cards filtered by activeFilter ────────────────────────────────
-    private void renderCards() {
-        if (!isAdded()) return;
-        cardsContainer.removeAllViews();
-
-        List<Map<String, Object>> toShow = new ArrayList<>();
-        for (Map<String, Object> user : allUsers) {
-            if (matchesFilter(user)) toShow.add(user);
-        }
-
-        emptyState.setVisibility(toShow.isEmpty() ? View.VISIBLE : View.GONE);
-
-        LayoutInflater inflater = LayoutInflater.from(requireContext());
-        for (int i = 0; i < toShow.size(); i++) {
-            View card = buildCard(inflater, toShow.get(i), i);
-            cardsContainer.addView(card);
-        }
-    }
-
-    private boolean matchesFilter(Map<String, Object> user) {
-        if (activeFilter == null) return true;
-
-        // Check if filter matches a hobby
+    private boolean matchesChip(Map<String, Object> user, String filter) {
         List<?> hobbies = (List<?>) user.get("hobbies");
         if (hobbies != null) {
             for (Object h : hobbies) {
                 String label = h.toString();
                 if (label.contains(" ")) label = label.substring(label.indexOf(" ") + 1);
-                if (label.equalsIgnoreCase(activeFilter)) return true;
+                if (label.equalsIgnoreCase(filter)) return true;
             }
         }
-
-        // Check if filter matches a language
         Object langsObj = user.get("languages");
         if (langsObj instanceof Map) {
             for (Object key : ((Map<?, ?>) langsObj).keySet()) {
                 String flag = FLAG_MAP.getOrDefault(key.toString(), "🌐");
-                String full = flag + " " + key.toString();
-                if (full.equalsIgnoreCase(activeFilter) || key.toString().equalsIgnoreCase(activeFilter))
-                    return true;
+                if ((flag + " " + key).equalsIgnoreCase(filter)
+                        || key.toString().equalsIgnoreCase(filter)) return true;
             }
         }
         return false;
     }
 
-    // ── Build a single person card view ──────────────────────────────────────
-    private View buildCard(LayoutInflater inflater, Map<String, Object> user, int index) {
+    // ── Render cards ──────────────────────────────────────────────────────────
+    private void renderCards(List<Map<String, Object>> users) {
+        if (!isAdded()) return;
+        cardsContainer.removeAllViews();
+        if (users.isEmpty()) { showEmpty(); return; }
+        emptyState.setVisibility(View.GONE);
+        LayoutInflater inf = LayoutInflater.from(requireContext());
+        for (int i = 0; i < users.size(); i++) buildCard(inf, users.get(i), i);
+    }
+
+    private void showEmpty() {
+        emptyState.setVisibility(View.VISIBLE);
+        cardsContainer.removeAllViews();
+    }
+
+    private void buildCard(LayoutInflater inflater, Map<String, Object> user, int index) {
         View card = inflater.inflate(R.layout.item_person_card, cardsContainer, false);
 
-        String name  = getStr(user, "displayName", "Anonymous");
-        String email = getStr(user, "email", "");
+        String otherUid  = str(user, "_uid", "");
+        String name      = str(user, "displayName", "Anonymous");
+        String photoB64  = str(user, "photo", "");
+        String storedBio = str(user, "bio", "");
 
         // Initials
-        String initials = "?";
-        String[] parts = name.trim().split("\\s+");
-        if (parts.length >= 2) initials = "" + parts[0].charAt(0) + parts[1].charAt(0);
-        else if (name.length() > 0) initials = name.substring(0, Math.min(2, name.length()));
-        initials = initials.toUpperCase();
+        String[] parts  = name.trim().split("\\s+");
+        String initials = parts.length >= 2
+                ? ("" + parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase()
+                : name.substring(0, Math.min(2, name.length())).toUpperCase();
 
-        // Avatar panel background — cycle through gradient palette
+        // Avatar panel gradient
         int[] grad = AVATAR_GRADIENTS[index % AVATAR_GRADIENTS.length];
         View panel = card.findViewById(R.id.person_avatar_panel);
-        panel.setBackground(buildGradientDrawable(grad[0], grad[1]));
+        android.graphics.drawable.GradientDrawable gd =
+                new android.graphics.drawable.GradientDrawable(
+                        android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+                        new int[]{grad[0], grad[1]});
+        panel.setBackground(gd);
 
         ((TextView) card.findViewById(R.id.person_initials)).setText(initials);
 
-        // Flag — first language in their profile
+        // Photo
+        if (!photoB64.isEmpty()) {
+            try {
+                byte[] bytes = Base64.decode(photoB64, Base64.DEFAULT);
+                Bitmap bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+                ImageView pv = card.findViewById(R.id.person_photo);
+                pv.setImageBitmap(bmp);
+                pv.setVisibility(View.VISIBLE);
+                card.findViewById(R.id.person_initials).setVisibility(View.GONE);
+            } catch (Exception ignored) {}
+        }
+
+        // Languages
         Object langsObj = user.get("languages");
-        String firstFlag = "🌐";
-        String langLine  = "";
+        String firstFlag = "🌐", langLine = "";
         if (langsObj instanceof Map) {
-            Map<?, ?> langsMap = (Map<?, ?>) langsObj;
-            List<String> langEntries = new ArrayList<>();
-            for (Map.Entry<?, ?> e : langsMap.entrySet()) {
+            List<String> entries = new ArrayList<>();
+            for (Map.Entry<?, ?> e : ((Map<?, ?>) langsObj).entrySet()) {
                 String flag = FLAG_MAP.getOrDefault(e.getKey().toString(), "🌐");
                 if (firstFlag.equals("🌐")) firstFlag = flag;
-                langEntries.add(flag + " " + e.getKey() + " · " + e.getValue());
+                entries.add(flag + " " + e.getKey() + " · " + e.getValue());
             }
-            langLine = android.text.TextUtils.join("  ", langEntries);
+            langLine = android.text.TextUtils.join("  ", entries);
         }
         ((TextView) card.findViewById(R.id.person_flag)).setText(firstFlag);
         ((TextView) card.findViewById(R.id.person_languages)).setText(langLine);
-
-        // Name
         ((TextView) card.findViewById(R.id.person_name)).setText(name);
 
-        // Bio — generate from hobbies if no bio field
+        // Bio
         List<?> hobbies = (List<?>) user.get("hobbies");
-        String bio = buildBio(name, hobbies);
+        String bio = storedBio.isEmpty() ? buildBio(hobbies) : storedBio;
         ((TextView) card.findViewById(R.id.person_bio)).setText(bio);
 
-        // Online dot — show for ~30% of users (index mod 3 == 0) as a UI hint
-        if (index % 3 == 0) card.findViewById(R.id.person_online_dot).setVisibility(View.VISIBLE);
-
-        // Hobby chips — max 3
+        // Hobby chips
         ChipGroup chipGroup = card.findViewById(R.id.person_hobby_chips);
         if (hobbies != null) {
             int count = 0;
             for (Object h : hobbies) {
-                if (count >= 3) break;
+                if (count++ >= 3) break;
                 String label = h.toString();
                 if (label.contains(" ")) label = label.substring(label.indexOf(" ") + 1);
                 chipGroup.addView(makeTinyChip(label));
-                count++;
             }
         }
 
-        // Start chatting button
+        // Online dot for some users
+        if (index % 3 == 0) card.findViewById(R.id.person_online_dot).setVisibility(View.VISIBLE);
+
+        // ── Start chatting — create or reuse a Firestore chat doc ────────────
+        final String fOtherUid   = otherUid;
+        final String fOtherName  = name;
+        final String fOtherPhoto = photoB64;
+        final String fLangLine   = langLine;
         card.findViewById(R.id.person_chat_btn).setOnClickListener(v ->
-                Toast.makeText(requireContext(),
-                        "Starting chat with " + name + "…", Toast.LENGTH_SHORT).show()
+                startOrOpenChat(fOtherUid, fOtherName, fOtherPhoto, fLangLine)
         );
 
-        // Staggered entrance animation
-        card.setAlpha(0f);
-        card.setTranslationY(20f);
+        card.setAlpha(0f); card.setTranslationY(20f);
         card.animate().alpha(1f).translationY(0f)
                 .setDuration(320).setStartDelay(60L * index)
                 .setInterpolator(new DecelerateInterpolator()).start();
 
-        return card;
+        cardsContainer.addView(card);
     }
 
-    // ── Placeholder cards shown when Firestore fails ─────────────────────────
-    private void renderPlaceholders() {
-        if (!isAdded()) return;
-        cardsContainer.removeAllViews();
+    /**
+     * Creates a deterministic chat ID from the two UIDs (sorted alphabetically so
+     * both users always resolve to the same document), then opens ChatActivity.
+     */
+    private void startOrOpenChat(String otherUid, String otherName,
+                                 String otherPhoto, String otherLangs) {
+        // Deterministic ID: sort UIDs so the same pair always maps to the same doc
+        String[] uids = {myUid, otherUid};
+        Arrays.sort(uids);
+        String chatId = uids[0] + "_" + uids[1];
 
-        String[][] placeholders = {
-                {"Maria G.", "🇪🇸", "Loves travel and cooking. Looking for English practice partners."},
-                {"Kenji T.", "🇯🇵", "Anime fan and guitarist. Happy to teach Japanese in exchange!"},
-                {"Lena K.", "🇩🇪", "Tech enthusiast and avid reader. Let's swap languages!"},
-        };
+        FirebaseFirestore db = FirebaseFirestore.getInstance();
 
-        LayoutInflater inflater = LayoutInflater.from(requireContext());
-        for (int i = 0; i < placeholders.length; i++) {
-            Map<String, Object> fake = new HashMap<>();
-            fake.put("displayName", placeholders[i][0]);
-            fake.put("email", "");
-            View card = buildCard(inflater, fake, i);
-            cardsContainer.addView(card);
-        }
+        // Create the chat doc if it doesn't exist yet (using set with merge=false is fine;
+        // we check existence first to avoid overwriting lastMessage)
+        db.collection("chats").document(chatId).get()
+                .addOnSuccessListener(doc -> {
+                    if (!doc.exists()) {
+                        // Build participant name/photo maps for ChatsFragment quick display
+                        Map<String, Object> names  = new HashMap<>();
+                        Map<String, Object> photos = new HashMap<>();
+                        names.put(myUid,    myName);
+                        names.put(otherUid, otherName);
+                        if (!myPhoto.isEmpty())    photos.put(myUid,    myPhoto);
+                        if (!otherPhoto.isEmpty()) photos.put(otherUid, otherPhoto);
+
+                        Map<String, Object> chatData = new HashMap<>();
+                        chatData.put("participants",                   Arrays.asList(myUid, otherUid));
+                        chatData.put("participantNames",               names);
+                        chatData.put("participantPhotos",              photos);
+                        chatData.put("otherLangs_" + myUid,           otherLangs);
+                        chatData.put("lastMessage",                    "");
+                        chatData.put("lastTimestamp",                  Timestamp.now());
+                        db.collection("chats").document(chatId).set(chatData);
+                    }
+
+                    if (!isAdded()) return;
+                    Intent intent = new Intent(requireContext(), ChatActivity.class);
+                    intent.putExtra(ChatActivity.EXTRA_CHAT_ID,    chatId);
+                    intent.putExtra(ChatActivity.EXTRA_OTHER_UID,  otherUid);
+                    intent.putExtra(ChatActivity.EXTRA_OTHER_NAME, otherName);
+                    intent.putExtra(ChatActivity.EXTRA_OTHER_LANGS, otherLangs);
+                    intent.putExtra(ChatActivity.EXTRA_OTHER_PHOTO, otherPhoto);
+                    startActivity(intent);
+                });
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
-
-    private String buildBio(String name, List<?> hobbies) {
+    private String buildBio(List<?> hobbies) {
         if (hobbies == null || hobbies.isEmpty())
             return "Language learner looking to connect and practice.";
         List<String> labels = new ArrayList<>();
@@ -377,15 +440,17 @@ public class DiscoverFragment extends Fragment {
         return chip;
     }
 
-    private android.graphics.drawable.GradientDrawable buildGradientDrawable(int start, int end) {
-        android.graphics.drawable.GradientDrawable gd = new android.graphics.drawable.GradientDrawable(
-                android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
-                new int[]{start, end});
-        return gd;
-    }
-
-    private String getStr(Map<String, Object> map, String key, String fallback) {
+    private String str(Map<?, ?> map, String key, String fallback) {
+        if (map == null) return fallback;
         Object v = map.get(key);
         return v != null ? v.toString() : fallback;
+    }
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        if (authStateListener != null) {
+            FirebaseAuth.getInstance().removeAuthStateListener(authStateListener);
+        }
     }
 }

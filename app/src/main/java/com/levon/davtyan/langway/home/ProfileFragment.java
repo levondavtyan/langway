@@ -18,6 +18,10 @@ import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.FirebaseFirestore;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.util.Base64;
+import android.widget.ImageView;
 import com.levon.davtyan.langway.MainActivity;
 import androidx.cardview.widget.CardView;
 import com.google.android.material.chip.ChipGroup;
@@ -68,6 +72,8 @@ public class ProfileFragment extends Fragment {
 
         TextView     nameView    = v.findViewById(R.id.profile_name);
         TextView     emailView   = v.findViewById(R.id.profile_email);
+        TextView     bioView     = v.findViewById(R.id.profile_bio);
+        ImageView    photoView   = v.findViewById(R.id.profile_photo);
         LinearLayout pathCards   = v.findViewById(R.id.profile_path_cards);
         CardView     hobbiesCard = v.findViewById(R.id.profile_hobbies_card);
         ChipGroup    hobbyChips  = v.findViewById(R.id.profile_hobby_chips);
@@ -114,6 +120,24 @@ public class ProfileFragment extends Fragment {
                         String displayName = doc.getString("displayName");
                         if (displayName != null && !displayName.isEmpty())
                             nameView.setText(displayName);
+
+                        // Bio
+                        String bio = doc.getString("bio");
+                        if (bio != null && !bio.isEmpty()) {
+                            bioView.setText(bio);
+                            bioView.setVisibility(View.VISIBLE);
+                        }
+
+                        // Profile photo (Base64-encoded JPEG)
+                        String photoB64 = doc.getString("photo");
+                        if (photoB64 != null && !photoB64.isEmpty()) {
+                            try {
+                                byte[] bytes = Base64.decode(photoB64, Base64.DEFAULT);
+                                Bitmap bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+                                photoView.setImageBitmap(bmp);
+                                photoView.setVisibility(View.VISIBLE);
+                            } catch (Exception ignored) {}
+                        }
 
                         // Build lang pairs list from Firestore Map
                         List<String> langPairs = new ArrayList<>();

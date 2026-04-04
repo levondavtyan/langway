@@ -41,16 +41,18 @@ public class MainActivity extends AppCompatActivity {
     private TextView headerTitle;
 
     private static final String[] STEP_TITLES = {
-            "Who are you?", "Your languages", "Your hobbies"
+            "Who are you?", "Your languages", "Your hobbies", "Your profile"
     };
     private static final String[] STEP_ERRORS = {
             "Please fill in your name, a valid email and a password (6+ chars) before continuing.",
             "Please add at least one language before continuing.",
+            "",
             ""
     };
 
     private final Fragment[] fragments = {
-            new LoginFragment(), new LanguageFragment(), new HobbiesFragment()
+            new LoginFragment(), new LanguageFragment(), new HobbiesFragment(),
+            new ProfileSetupFragment()
     };
     private int currentIndex = 0;
     private String pendingUid = null; // set after step-1 Firebase Auth creation
@@ -158,14 +160,18 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void onFinish() {
+        Log.d(TAG, "onFinish called, pendingUid=" + pendingUid);
         // Auth user was already created at step 1 — pendingUid holds their UID.
-        // Here we just write the Firestore profile and navigate.
-        LoginFragment    loginFrag   = (LoginFragment)    fragments[0];
-        LanguageFragment langFrag    = (LanguageFragment) fragments[1];
-        HobbiesFragment  hobbiesFrag = (HobbiesFragment)  fragments[2];
+        // Here we collect all profile data, write it to Firestore, then navigate.
+        LoginFragment        loginFrag   = (LoginFragment)        fragments[0];
+        LanguageFragment     langFrag    = (LanguageFragment)     fragments[1];
+        HobbiesFragment      hobbiesFrag = (HobbiesFragment)      fragments[2];
+        ProfileSetupFragment setupFrag   = (ProfileSetupFragment) fragments[3];
 
-        final String name  = loginFrag.getFullName();
-        final String email = loginFrag.getEmail();
+        final String name    = loginFrag.getFullName();
+        final String email   = loginFrag.getEmail();
+        final String bio     = setupFrag.getBio();
+        final String photoB64 = setupFrag.getPhotoBase64();
         final LinkedHashMap<String, String> langs = langFrag.getSelectedLanguages();
         final ArrayList<String> hobbies = new ArrayList<>(hobbiesFrag.getSelectedHobbies());
 
@@ -175,13 +181,11 @@ public class MainActivity extends AppCompatActivity {
         nextBtn.setEnabled(false);
         nextBtn.setText("Creating account…");
 
-        // Use the UID from step 1; fall back to currentUser if somehow null
         final String uid = pendingUid != null ? pendingUid
                 : (FirebaseAuth.getInstance().getCurrentUser() != null
                 ? FirebaseAuth.getInstance().getCurrentUser().getUid() : null);
 
         if (uid == null) {
-            // Should never happen — means step 1 never completed successfully
             nextBtn.setEnabled(true);
             nextBtn.setText(getString(R.string.finish_button_text));
             Toast.makeText(this, "Session error. Please start over.", Toast.LENGTH_LONG).show();
@@ -195,18 +199,34 @@ public class MainActivity extends AppCompatActivity {
         doc.put("languages",   langs);
         doc.put("hobbies",     hobbies);
         doc.put("createdAt",   com.google.firebase.Timestamp.now());
+        if (bio != null && !bio.isEmpty())    doc.put("bio",   bio);
+        if (photoB64 != null)                  doc.put("photo", photoB64);
 
-        FirebaseFirestore.getInstance()
-                .collection("users").document(uid).set(doc)
-                .addOnSuccessListener(v -> Log.d(TAG, "Firestore write OK"))
-                .addOnFailureListener(ex -> Log.e(TAG, "Firestore write failed: " + ex.getMessage()));
-
-        Intent intent = new Intent(this, PathActivity.class);
-        intent.putExtra(PathActivity.EXTRA_NAME, name);
-        intent.putStringArrayListExtra(PathActivity.EXTRA_LANGUAGES, langPairs);
-        intent.putStringArrayListExtra(PathActivity.EXTRA_HOBBIES, hobbies);
-        startActivity(intent);
-        overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
+        // Force a fresh ID token before writing — ensures Firestore sees the user
+        // as authenticated even if the token hasn't propagated yet from registerAtStepOne
+        FirebaseAuth.getInstance().getCurrentUser()
+                .getIdToken(true)
+                .addOnCompleteListener(this, tokenTask -> {
+                    Log.d(TAG, "Token refresh: " + tokenTask.isSuccessful()
+                            + " uid=" + uid + " langs=" + langs + " hobbies=" + hobbies);
+                    FirebaseFirestore.getInstance()
+                            .collection("users").document(uid).set(doc)
+                            .addOnSuccessListener(v -> {
+                                Log.d(TAG, "Firestore write OK");
+                                Intent intent = new Intent(this, PathActivity.class);
+                                intent.putExtra(PathActivity.EXTRA_NAME, name);
+                                intent.putStringArrayListExtra(PathActivity.EXTRA_LANGUAGES, langPairs);
+                                intent.putStringArrayListExtra(PathActivity.EXTRA_HOBBIES, hobbies);
+                                startActivity(intent);
+                                overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
+                            })
+                            .addOnFailureListener(ex -> {
+                                Log.e(TAG, "Firestore write failed: " + ex.getMessage());
+                                nextBtn.setEnabled(true);
+                                nextBtn.setText(getString(R.string.finish_button_text));
+                                Toast.makeText(this, "Failed to save profile: " + ex.getMessage(), Toast.LENGTH_LONG).show();
+                            });
+                });
     }
 
     /** Shown when an already-registered email is used for sign-up. */
@@ -238,9 +258,10 @@ public class MainActivity extends AppCompatActivity {
 
     private boolean currentStepIsValid() {
         Fragment f = fragments[currentIndex];
-        if (f instanceof LoginFragment)    return ((LoginFragment)    f).isValid();
-        if (f instanceof LanguageFragment) return ((LanguageFragment) f).isValid();
-        if (f instanceof HobbiesFragment)  return ((HobbiesFragment)  f).isValid();
+        if (f instanceof LoginFragment)        return ((LoginFragment)        f).isValid();
+        if (f instanceof LanguageFragment)     return ((LanguageFragment)     f).isValid();
+        if (f instanceof HobbiesFragment)      return ((HobbiesFragment)      f).isValid();
+        if (f instanceof ProfileSetupFragment) return ((ProfileSetupFragment) f).isValid();
         return true;
     }
 

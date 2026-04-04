@@ -37,6 +37,14 @@
                 android:textSize="22sp"
                 android:textStyle="bold" />
 
+            <!-- Profile photo — covers initials when available -->
+            <ImageView
+                android:id="@+id/person_photo"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="centerCrop"
+                android:visibility="gone" />
+
             <!-- Language flag badge bottom-right of panel -->
             <TextView
                 android:id="@+id/person_flag"

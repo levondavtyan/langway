@@ -2,9 +2,7 @@ package com.levon.davtyan.langway;
 
 import android.annotation.SuppressLint;
 import android.content.Intent;
-import android.graphics.Color;
 import android.os.Bundle;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.animation.DecelerateInterpolator;
@@ -20,41 +18,67 @@ import androidx.core.view.WindowInsetsCompat;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
 
-import org.json.JSONArray;
-import org.json.JSONObject;
-
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Scanner;
+import java.util.Set;
 
 public class PathActivity extends AppCompatActivity {
 
-    private static final String TAG = "PathActivity";
-    private static final String GROK_API_KEY = "YOUR_GROK_API_KEY";
+    // ── Intent key constants ─────────────────────────────────────────────────
+    public static final String EXTRA_LANGUAGES  = "extra_languages";   // ArrayList<String> "Lang|Level"
+    public static final String EXTRA_HOBBIES    = "extra_hobbies";     // ArrayList<String>
+    public static final String EXTRA_NAME       = "extra_name";        // String
 
-    public static final String EXTRA_LANGUAGES = "extra_languages";
-    public static final String EXTRA_HOBBIES   = "extra_hobbies";
-    public static final String EXTRA_NAME      = "extra_name";
-
+    // ── Language → emoji flag ────────────────────────────────────────────────
     private static final Map<String, String> FLAG_MAP = new HashMap<String, String>() {{
-        put("English","🇬🇧"); put("Spanish","🇪🇸"); put("Russian","🇷🇺");
-        put("Armenian","🇦🇲"); put("German","🇩🇪"); put("French","🇫🇷");
-        put("Mandarin","🇨🇳"); put("Japanese","🇯🇵"); put("Italian","🇮🇹");
-        put("Portuguese","🇵🇹"); put("Arabic","🇸🇦"); put("Korean","🇰🇷");
-        put("Dutch","🇳🇱"); put("Swedish","🇸🇪"); put("Turkish","🇹🇷");
+        put("English",    "🇬🇧"); put("Spanish",   "🇪🇸"); put("Russian",   "🇷🇺");
+        put("Armenian",   "🇦🇲"); put("German",    "🇩🇪"); put("French",    "🇫🇷");
+        put("Mandarin",   "🇨🇳"); put("Japanese",  "🇯🇵"); put("Italian",   "🇮🇹");
+        put("Portuguese", "🇵🇹"); put("Arabic",    "🇸🇦"); put("Korean",    "🇰🇷");
+        put("Dutch",      "🇳🇱"); put("Swedish",   "🇸🇪"); put("Turkish",   "🇹🇷");
     }};
 
-    // Hard colors so dark-mode system can't override chip backgrounds
-    private static final int CHIP_BLUE_BG   = 0xFFE3ECFF;
-    private static final int CHIP_BLUE_TEXT = 0xFF1A56CC;
-    private static final int CHIP_GREEN_BG  = 0xFFDFFAF3;
-    private static final int CHIP_GREEN_TEXT= 0xFF00A87A;
+    // ── Hobby → field label (maps interest areas to language path types) ─────
+    // Each entry: hobby keyword → list of recommended path "types"
+    private static final Map<String, List<String>> HOBBY_PATH_MAP = new HashMap<String, List<String>>() {{
+        put("Gaming",      Arrays.asList("Gaming & Esports",   "Online Communities", "Tech Slang"));
+        put("Technology",  Arrays.asList("Technical English",  "Tech Jargon",        "STEM Communication"));
+        put("Music",       Arrays.asList("Music & Lyrics",     "Cultural Exchange",  "Entertainment Media"));
+        put("Travel",      Arrays.asList("Travel & Tourism",   "Everyday Phrases",   "Cultural Immersion"));
+        put("Cooking",     Arrays.asList("Food & Culinary",    "Everyday Phrases",   "Cultural Exchange"));
+        put("Art",         Arrays.asList("Creative Writing",   "Cultural Exchange",  "Art & Design"));
+        put("Sports",      Arrays.asList("Sports Commentary",  "Teamwork Language",  "Broadcasting"));
+        put("Movies",      Arrays.asList("Entertainment Media","Film & Script",      "Pop Culture"));
+        put("Photography", Arrays.asList("Creative Expression","Social Media",       "Art & Design"));
+        put("Nature",      Arrays.asList("Environmental",      "Scientific English", "Travel & Outdoors"));
+        put("Wellness",    Arrays.asList("Health & Wellness",  "Mindfulness",        "Medical Basics"));
+        put("Theatre",     Arrays.asList("Dramatic Arts",      "Literature",         "Performance"));
+        put("Instruments", Arrays.asList("Music Theory",       "Cultural Exchange",  "Arts Performance"));
+        put("Fitness",     Arrays.asList("Sports & Fitness",   "Health Coaching",    "Motivational"));
+        put("Puzzles",     Arrays.asList("Academic",           "Logic & Reasoning",  "STEM Communication"));
+        put("Animals",     Arrays.asList("Environmental",      "Scientific English", "Veterinary Basics"));
+        put("Writing",     Arrays.asList("Academic Writing",   "Creative Fiction",   "Journalism"));
+        put("Languages",   Arrays.asList("Linguistics",        "Academic",           "Translation"));
+        put("Board Games", Arrays.asList("Strategy & Logic",   "Social Language",    "Gaming & Esports"));
+        put("Reading",     Arrays.asList("Academic",           "Literary Analysis",  "Creative Writing"));
+    }};
+
+    // ── Which languages are trending in which hobby fields ───────────────────
+    private static final Map<String, Set<String>> TRENDING_MAP = new HashMap<String, Set<String>>() {{
+        put("Technology",  new HashSet<>(Arrays.asList("English", "Mandarin", "German")));
+        put("Gaming",      new HashSet<>(Arrays.asList("English", "Korean", "Japanese")));
+        put("Music",       new HashSet<>(Arrays.asList("English", "Spanish", "French")));
+        put("Movies",      new HashSet<>(Arrays.asList("English", "Spanish", "Korean")));
+        put("Travel",      new HashSet<>(Arrays.asList("Spanish", "French", "Japanese", "Italian")));
+        put("Cooking",     new HashSet<>(Arrays.asList("Italian", "French", "Japanese")));
+        put("Sports",      new HashSet<>(Arrays.asList("English", "Spanish", "Portuguese")));
+        put("Art",         new HashSet<>(Arrays.asList("French", "Italian", "German")));
+        put("Writing",     new HashSet<>(Arrays.asList("English", "French", "Spanish")));
+    }};
 
     @SuppressLint("MissingInflatedId")
     @Override
@@ -63,7 +87,9 @@ public class PathActivity extends AppCompatActivity {
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_path);
 
-        com.google.android.material.button.MaterialButton startBtn = findViewById(R.id.path_start_btn);
+        // Push "Let's Go" button above the OS navigation bar
+        com.google.android.material.button.MaterialButton startBtn =
+                findViewById(R.id.path_start_btn);
         ViewCompat.setOnApplyWindowInsetsListener(startBtn, (v, windowInsets) -> {
             Insets insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
             androidx.constraintlayout.widget.ConstraintLayout.LayoutParams lp =
@@ -73,31 +99,64 @@ public class PathActivity extends AppCompatActivity {
             return windowInsets;
         });
 
-        ArrayList<String> langPairs = getIntent().getStringArrayListExtra(EXTRA_LANGUAGES);
-        ArrayList<String> hobbies   = getIntent().getStringArrayListExtra(EXTRA_HOBBIES);
-        String name                 = getIntent().getStringExtra(EXTRA_NAME);
-        if (langPairs == null) langPairs = new ArrayList<>();
-        if (hobbies   == null) hobbies   = new ArrayList<>();
+        final ArrayList<String> langPairs = getIntent().getStringArrayListExtra(EXTRA_LANGUAGES) != null
+                ? getIntent().getStringArrayListExtra(EXTRA_LANGUAGES) : new ArrayList<>();
+        final ArrayList<String> hobbies = getIntent().getStringArrayListExtra(EXTRA_HOBBIES) != null
+                ? getIntent().getStringArrayListExtra(EXTRA_HOBBIES) : new ArrayList<>();
+        String name                  = getIntent().getStringExtra(EXTRA_NAME);
 
+        // ── Personalise header ────────────────────────────────────────────────
+        TextView greetingView = findViewById(R.id.path_greeting);
+        TextView titleView    = findViewById(R.id.path_title);
         String firstName = (name != null && name.contains(" "))
                 ? name.split(" ")[0] : (name != null ? name : "");
-        ((TextView)findViewById(R.id.path_greeting)).setText(
-                "YOUR LEARNING PATH" + (firstName.isEmpty() ? "" : ", " + firstName.toUpperCase()));
-        ((TextView)findViewById(R.id.path_title)).setText(
-                hobbies.isEmpty() ? "Tailored just for you" : "Built around your interests");
+        greetingView.setText("YOUR LEARNING PATH" + (firstName.isEmpty() ? "" : ", " + firstName.toUpperCase()));
+        titleView.setText(hobbies.isEmpty() ? "Tailored just for you"
+                : "Built around your interests");
 
-        // Hobby chips — force explicit colors
+        // ── Hobby chips in summary card ───────────────────────────────────────
         ChipGroup hobbyChipGroup = findViewById(R.id.path_hobby_chips);
         for (String hobby : hobbies) {
+            // Strip emoji prefix for cleaner display
             String label = hobby.contains(" ") ? hobby.substring(hobby.indexOf(" ") + 1) : hobby;
-            hobbyChipGroup.addView(makeChip(label, CHIP_GREEN_BG, CHIP_GREEN_TEXT));
+            Chip chip = new Chip(this);
+            chip.setText(label);
+            chip.setCheckable(false);
+            chip.setChipBackgroundColorResource(R.color.brand_green_light);
+            chip.setChipStrokeColorResource(R.color.outline);
+            chip.setChipStrokeWidth(1f);
+            chip.setTextColor(getColor(R.color.brand_green_dark));
+            chip.setTextSize(11f);
+            hobbyChipGroup.addView(chip);
         }
 
+        // ── Build path cards ──────────────────────────────────────────────────
         LinearLayout container = findViewById(R.id.path_cards_container);
         LayoutInflater inflater = LayoutInflater.from(this);
-        final ArrayList<String> finalHobbies  = hobbies;
-        final ArrayList<String> finalLangPairs = langPairs;
-        final String fFirstName = firstName;
+
+        // Collect all path types from hobbies
+        List<String> allPathTypes = new ArrayList<>();
+        Set<String> trendingLangs = new HashSet<>();
+        for (String hobby : hobbies) {
+            String key = extractHobbyKey(hobby);
+            List<String> types = HOBBY_PATH_MAP.get(key);
+            if (types != null) allPathTypes.addAll(types);
+            Set<String> trending = TRENDING_MAP.get(key);
+            if (trending != null) trendingLangs.addAll(trending);
+        }
+        // Deduplicate path types, keep first 3
+        List<String> dedupedTypes = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        for (String t : allPathTypes) {
+            if (seen.add(t)) dedupedTypes.add(t);
+            if (dedupedTypes.size() >= 3) break;
+        }
+        // Fallback if no hobbies selected
+        if (dedupedTypes.isEmpty()) {
+            dedupedTypes.add("Conversational");
+            dedupedTypes.add("Everyday Phrases");
+            dedupedTypes.add("Cultural Exchange");
+        }
 
         int cardIndex = 0;
         for (String pair : langPairs) {
@@ -107,156 +166,86 @@ public class PathActivity extends AppCompatActivity {
             String level = parts[1];
 
             View card = inflater.inflate(R.layout.item_path_card, container, false);
-            ((TextView)card.findViewById(R.id.path_card_icon)).setText(FLAG_MAP.getOrDefault(lang, "🌐"));
-            ((TextView)card.findViewById(R.id.path_card_language)).setText(lang);
-            ((TextView)card.findViewById(R.id.path_card_proficiency)).setText(level);
-            card.findViewById(R.id.path_card_trend_badge).setVisibility(View.GONE);
 
-            ChipGroup chipGroup  = card.findViewById(R.id.path_card_types);
-            TextView reasonView  = card.findViewById(R.id.path_card_reason);
-            reasonView.setText("Generating your personalised path…");
+            // Icon / flag
+            ((TextView) card.findViewById(R.id.path_card_icon))
+                    .setText(FLAG_MAP.getOrDefault(lang, "🌐"));
+            ((TextView) card.findViewById(R.id.path_card_language)).setText(lang);
+            ((TextView) card.findViewById(R.id.path_card_proficiency)).setText(level);
 
-            card.setAlpha(0f); card.setTranslationY(24f);
+            // Trending badge
+            TextView trendBadge = card.findViewById(R.id.path_card_trend_badge);
+            if (trendingLangs.contains(lang)) {
+                trendBadge.setText("🔥 Trending");
+                trendBadge.setVisibility(View.VISIBLE);
+            }
+
+            // Path type chips
+            ChipGroup chipGroup = card.findViewById(R.id.path_card_types);
+            List<String> cardTypes = buildCardTypes(lang, level, dedupedTypes);
+            for (String type : cardTypes) {
+                Chip chip = new Chip(this);
+                chip.setText(type);
+                chip.setCheckable(false);
+                chip.setChipBackgroundColorResource(R.color.brand_blue_light);
+                chip.setChipStrokeColorResource(R.color.outline);
+                chip.setChipStrokeWidth(1f);
+                chip.setTextColor(getColor(R.color.brand_blue_dark));
+                chip.setTextSize(11f);
+                chipGroup.addView(chip);
+            }
+
+            // Reason text
+            ((TextView) card.findViewById(R.id.path_card_reason))
+                    .setText(buildReason(lang, level, hobbies));
+
+            // Staggered entrance
+            card.setAlpha(0f);
+            card.setTranslationY(24f);
             final long delay = 200 + cardIndex * 100L;
-            card.animate().alpha(1f).translationY(0f).setDuration(380).setStartDelay(delay)
+            card.animate().alpha(1f).translationY(0f)
+                    .setDuration(380).setStartDelay(delay)
                     .setInterpolator(new DecelerateInterpolator()).start();
+
             container.addView(card);
-
-            final String fLang = lang, fLevel = level;
-            new Thread(() -> {
-                PathCardData data = fetchCardData(fLang, fLevel, finalHobbies, fFirstName);
-                runOnUiThread(() -> {
-                    if (data == null) {
-                        reasonView.setText(buildFallbackReason(fLang, fLevel, finalHobbies));
-                        chipGroup.addView(makeChip((fLevel.startsWith("A") ? "Practical " : fLevel.startsWith("B") ? "Conversational " : "Professional ") + fLang, CHIP_BLUE_BG, CHIP_BLUE_TEXT));
-                        chipGroup.addView(makeChip("Cultural Exchange", CHIP_BLUE_BG, CHIP_BLUE_TEXT));
-                        return;
-                    }
-                    reasonView.setText(data.reason);
-                    // Show trending badge if AI says it's trending
-                    if (data.isTrending) {
-                        TextView badge = card.findViewById(R.id.path_card_trend_badge);
-                        badge.setText("🔥 Trending");
-                        badge.setVisibility(View.VISIBLE);
-                    }
-                    for (String label : data.pathLabels) {
-                        chipGroup.addView(makeChip(label, CHIP_BLUE_BG, CHIP_BLUE_TEXT));
-                    }
-                });
-            }).start();
-
             cardIndex++;
         }
 
-        final String finalName = name;
-        startBtn.setOnClickListener(v -> {
+        // ── "Let's Go" → HomeActivity ─────────────────────────────────────────
+        findViewById(R.id.path_start_btn).setOnClickListener(v -> {
             Intent intent = new Intent(this, HomeActivity.class);
-            intent.putExtra(HomeActivity.EXTRA_NAME, finalName);
-            intent.putStringArrayListExtra(HomeActivity.EXTRA_LANGUAGES, finalLangPairs);
-            intent.putStringArrayListExtra(HomeActivity.EXTRA_HOBBIES, finalHobbies);
+            intent.putExtra(HomeActivity.EXTRA_NAME, name);
+            intent.putStringArrayListExtra(HomeActivity.EXTRA_LANGUAGES, langPairs);
+            intent.putStringArrayListExtra(HomeActivity.EXTRA_HOBBIES, hobbies);
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
             startActivity(intent);
             overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
         });
 
+        // Animate header
         View header = findViewById(R.id.path_header);
         header.setAlpha(0f);
         header.animate().alpha(1f).setDuration(500).start();
     }
 
-    // ── Data class returned from Claude ──────────────────────────────────────
-    static class PathCardData {
-        String reason;
-        List<String> pathLabels;
-        boolean isTrending;
-        PathCardData(String reason, List<String> pathLabels, boolean isTrending) {
-            this.reason = reason; this.pathLabels = pathLabels; this.isTrending = isTrending;
+    // ── Build context-aware path types per language ───────────────────────────
+    private List<String> buildCardTypes(String lang, String level, List<String> basePaths) {
+        List<String> result = new ArrayList<>();
+        // Prefix path type with language-specific qualifier based on level
+        String qualifier;
+        if (level.startsWith("A")) qualifier = "Practical ";
+        else if (level.startsWith("B")) qualifier = "Conversational ";
+        else qualifier = "Professional ";
+
+        for (String base : basePaths) {
+            result.add(qualifier + lang + " – " + base);
+            if (result.size() >= 2) break; // max 2 chips per card to keep it clean
         }
+        return result;
     }
 
-    /**
-     * Calls Claude API to generate:
-     * - A personalised reason sentence mentioning their specific hobbies and level
-     * - 2-3 currently trending path type labels for this specific language
-     * - Whether this language is trending globally right now
-     */
-    private PathCardData fetchCardData(String lang, String level, List<String> hobbies, String firstName) {
-        try {
-            String hobbyList = hobbies.isEmpty() ? "general interests"
-                    : android.text.TextUtils.join(", ", hobbies).replaceAll("[^a-zA-Z,\\s]", "").trim();
-
-            String prompt =
-                    "You are an expert language learning advisor with up-to-date knowledge of job markets, " +
-                            "cultural trends, and global demand for languages in 2025. " +
-                            "A user" + (firstName.isEmpty() ? "" : " named " + firstName) +
-                            " is learning " + lang + " at " + level + " level. " +
-                            "Their interests are: " + hobbyList + ". " +
-                            "Based on current 2025 trends in tech, entertainment, business and culture, generate:\n" +
-                            "1. A personalised 2-sentence reason why " + lang + " is valuable for someone with their " +
-                            "specific interests — be concrete, mention their actual hobbies, and reference real current demand.\n" +
-                            "2. Two to three short path type labels (max 4 words each) that are currently in high demand " +
-                            "for " + lang + " speakers in fields related to their interests.\n" +
-                            "3. Whether " + lang + " is currently trending (high global demand) — true or false.\n\n" +
-                            "Respond ONLY with a valid JSON object, no markdown, no extra text:\n" +
-                            "{\"reason\":\"...\",\"path1\":\"...\",\"path2\":\"...\",\"path3\":\"...\",\"trending\":true}";
-
-            URL url = new URL("https://api.x.ai/v1/chat/completions");
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setRequestMethod("POST");
-            conn.setRequestProperty("Content-Type", "application/json");
-            conn.setRequestProperty("Authorization", "Bearer " + GROK_API_KEY);
-            conn.setDoOutput(true);
-            conn.setConnectTimeout(10000);
-            conn.setReadTimeout(20000);
-
-            JSONObject body = new JSONObject();
-            body.put("model", "grok-3-mini");
-            body.put("max_tokens", 400);
-            JSONArray messages = new JSONArray();
-            JSONObject msg = new JSONObject();
-            msg.put("role", "user");
-            msg.put("content", prompt);
-            messages.put(msg);
-            body.put("messages", messages);
-
-            byte[] input = body.toString().getBytes(StandardCharsets.UTF_8);
-            try (OutputStream os = conn.getOutputStream()) { os.write(input); }
-
-            int status = conn.getResponseCode();
-            if (status != 200) {
-                Log.e(TAG, "Claude API status: " + status);
-                return null;
-            }
-
-            Scanner scanner = new Scanner(conn.getInputStream(), StandardCharsets.UTF_8.name());
-            StringBuilder sb = new StringBuilder();
-            while (scanner.hasNextLine()) sb.append(scanner.nextLine());
-            scanner.close();
-
-            JSONObject response = new JSONObject(sb.toString());
-            String text = response.getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content").trim();
-
-            // Strip any accidental markdown fences
-            text = text.replaceAll("```json|```", "").trim();
-            JSONObject parsed = new JSONObject(text);
-
-            String reason   = parsed.getString("reason");
-            boolean trending = parsed.optBoolean("trending", false);
-            List<String> labels = new ArrayList<>();
-            labels.add(parsed.getString("path1"));
-            labels.add(parsed.getString("path2"));
-            if (parsed.has("path3") && !parsed.getString("path3").isEmpty())
-                labels.add(parsed.getString("path3"));
-
-            return new PathCardData(reason, labels, trending);
-
-        } catch (Exception e) {
-            Log.e(TAG, "Claude API failed: " + e.getMessage());
-            return null;
-        }
-    }
-
-    private String buildFallbackReason(String lang, String level, List<String> hobbies) {
+    // ── Generate a personalised reason sentence ───────────────────────────────
+    private String buildReason(String lang, String level, List<String> hobbies) {
         String hobbySnippet = "";
         if (!hobbies.isEmpty()) {
             List<String> clean = new ArrayList<>();
@@ -267,21 +256,22 @@ public class PathActivity extends AppCompatActivity {
             }
             hobbySnippet = " — great for " + android.text.TextUtils.join(" and ", clean);
         }
-        String levelDesc = level.startsWith("A") ? "beginners"
-                : level.startsWith("B") ? "intermediate learners" : "advanced speakers";
+        String levelDesc;
+        if (level.startsWith("A1") || level.startsWith("A2")) levelDesc = "beginners";
+        else if (level.startsWith("B")) levelDesc = "intermediate learners";
+        else levelDesc = "advanced speakers";
+
         return lang + " is one of the most in-demand languages globally" + hobbySnippet
-                + ". This path is paced for " + levelDesc + " and focuses on real-world fluency.";
+                + ". This path is paced for " + levelDesc
+                + " and focuses on real-world fluency you can use straight away.";
     }
 
-    private Chip makeChip(String text, int bgColor, int textColor) {
-        Chip chip = new Chip(this);
-        chip.setText(text);
-        chip.setCheckable(false);
-        chip.setChipBackgroundColor(android.content.res.ColorStateList.valueOf(bgColor));
-        chip.setTextColor(textColor);
-        chip.setChipStrokeColor(android.content.res.ColorStateList.valueOf(0xFFB2DDD6));
-        chip.setChipStrokeWidth(1f);
-        chip.setTextSize(11f);
-        return chip;
+    /** Extract the bare hobby keyword (strip emoji + leading space) */
+    private String extractHobbyKey(String hobby) {
+        // HOBBIES strings look like "🎮 Gaming" — take the word after the space
+        if (hobby.contains(" ")) {
+            return hobby.substring(hobby.indexOf(" ") + 1).trim();
+        }
+        return hobby.trim();
     }
 }
