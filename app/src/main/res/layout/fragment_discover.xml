@@ -6,7 +6,6 @@
     android:layout_height="match_parent"
     android:background="@color/background">
 
-    <!-- Scrollable content -->
     <androidx.core.widget.NestedScrollView
         android:id="@+id/discover_scroll"
         android:layout_width="match_parent"
@@ -18,7 +17,6 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
-            <!-- Gradient header -->
             <FrameLayout
                 android:layout_width="match_parent"
                 android:layout_height="130dp"
@@ -54,7 +52,6 @@
                 </LinearLayout>
             </FrameLayout>
 
-            <!-- Filter chip bar — sticky feel, white bg, shadow -->
             <HorizontalScrollView
                 android:id="@+id/discover_filter_scroll"
                 android:layout_width="match_parent"
@@ -77,7 +74,6 @@
 
             </HorizontalScrollView>
 
-            <!-- Person cards list -->
             <LinearLayout
                 android:id="@+id/discover_cards_container"
                 android:layout_width="match_parent"
@@ -88,7 +84,6 @@
                 android:clipChildren="false"
                 android:clipToPadding="false" />
 
-            <!-- Empty state -->
             <LinearLayout
                 android:id="@+id/discover_empty"
                 android:layout_width="match_parent"

@@ -21,7 +21,6 @@ public class HobbiesFragment extends Fragment {
 
     private FragmentHobbiesBinding binding;
 
-    // Survives view destroy/recreate (back navigation)
     private final Set<String> selectedHobbies = new LinkedHashSet<>();
 
     private static final String[] HOBBIES = {
@@ -50,7 +49,6 @@ public class HobbiesFragment extends Fragment {
 
         buildChips();
 
-        // Entrance animations
         binding.hobbiesSubtitle.setAlpha(0f);
         binding.hobbiesSubtitle.setTranslationY(16f);
         binding.hobbiesSubtitle.animate()
@@ -66,7 +64,6 @@ public class HobbiesFragment extends Fragment {
                 .setInterpolator(new DecelerateInterpolator()).start();
     }
 
-    /** Hobbies are optional — always valid. */
     public boolean isValid() {
         return true;
     }
@@ -75,7 +72,6 @@ public class HobbiesFragment extends Fragment {
         return selectedHobbies;
     }
 
-    // ── Private helpers ──────────────────────────────────────────────────────
 
     private void buildChips() {
         binding.chipGroup.removeAllViews();
@@ -87,7 +83,6 @@ public class HobbiesFragment extends Fragment {
             chip.setCheckable(true);
             chip.setChecked(selectedHobbies.contains(hobby));
 
-            // Style: filled filter chip feel
             chip.setChipBackgroundColorResource(
                     chip.isChecked() ? R.color.brand_green_light : android.R.color.transparent);
             chip.setChipStrokeColorResource(R.color.outline);
@@ -101,7 +96,6 @@ public class HobbiesFragment extends Fragment {
                 if (checked) {
                     selectedHobbies.add(hobby);
                     btn.setBackgroundResource(R.color.brand_green_light);
-                    // Small bounce on select
                     btn.setScaleX(0.88f);
                     btn.setScaleY(0.88f);
                     btn.animate().scaleX(1f).scaleY(1f)
@@ -114,7 +108,6 @@ public class HobbiesFragment extends Fragment {
                 updateSelectionLabel();
             });
 
-            // Staggered entrance
             chip.setAlpha(0f);
             chip.animate().alpha(1f)
                     .setDuration(200).setStartDelay(140 + i * 30L)

@@ -120,7 +120,6 @@
                     android:textColor="@color/text_primary" />
             </com.google.android.material.textfield.TextInputLayout>
 
-            <!-- Forgot password link -->
             <TextView
                 android:id="@+id/signin_forgot_password"
                 android:layout_width="wrap_content"

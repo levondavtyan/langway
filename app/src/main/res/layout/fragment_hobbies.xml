@@ -18,7 +18,6 @@
         android:paddingBottom="32dp"
         android:clipToPadding="false">
 
-        <!-- Subtitle -->
         <TextView
             android:id="@+id/hobbies_subtitle"
             android:layout_width="wrap_content"
@@ -30,7 +29,6 @@
             android:textSize="13sp"
             android:alpha="0" />
 
-        <!-- Hobby chips grid — wrapped in a card for the same look as the picker card -->
         <androidx.cardview.widget.CardView
             android:id="@+id/hobbies_card"
             android:layout_width="match_parent"
@@ -42,10 +40,6 @@
             app:cardElevation="6dp"
             app:cardUseCompatPadding="true">
 
-            <!--
-                ChipGroup with app:chipSpacing so chips wrap and breathe.
-                Chips are added programmatically in HobbiesFragment.
-            -->
             <com.google.android.material.chip.ChipGroup
                 android:id="@+id/chip_group"
                 android:layout_width="match_parent"
@@ -56,7 +50,6 @@
 
         </androidx.cardview.widget.CardView>
 
-        <!-- Selection count feedback -->
         <TextView
             android:id="@+id/selection_label"
             android:layout_width="wrap_content"

@@ -9,7 +9,6 @@
     android:background="@color/background"
     tools:context=".MainActivity">
 
-    <!-- ── Gradient header ── -->
     <FrameLayout
         android:id="@+id/header"
         android:layout_width="0dp"
@@ -34,7 +33,6 @@
 
     </FrameLayout>
 
-    <!-- ── Floating step-card that overlaps the header ── -->
     <androidx.cardview.widget.CardView
         android:id="@+id/action_bar"
         android:layout_width="0dp"
@@ -62,7 +60,6 @@
 
     </androidx.cardview.widget.CardView>
 
-    <!-- ── Fragment container ── -->
     <FrameLayout
         android:id="@+id/frame"
         android:layout_width="0dp"
@@ -72,7 +69,6 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/action_bar" />
 
-    <!-- ── Bottom navigation bar ── -->
     <LinearLayout
         android:id="@+id/tool_bar"
         android:layout_width="0dp"

@@ -5,7 +5,7 @@
     <string name="header_title">Welcome to Langway!</string>
     <string name="action_bar_title">Please take time to register</string>
 
-    <!-- Strings related to login -->
+    <!-- Login -->
     <string name="prompt_full_name">Full name</string>
     <string name="prompt_email">Email</string>
     <string name="prompt_password">Password</string>
@@ -16,12 +16,13 @@
     <string name="invalid_password">Password must be >5 characters</string>
     <string name="login_failed">"Login failed"</string>
 
-    <!-- Strings related to language choosing -->
+    <!-- Language choosing -->
     <string name="add_button_text">Add</string>
     <string name="finish_button_text">Finish</string>
 
-    <!-- Strings related to Language Item Layout -->
+    <!-- Language Item Layout -->
     <string name="remove_button_text">Remove</string>
-    <!-- TODO: Remove or change this placeholder text -->
+
+
     <string name="hello_blank_fragment">Hello blank fragment</string>
 </resources>

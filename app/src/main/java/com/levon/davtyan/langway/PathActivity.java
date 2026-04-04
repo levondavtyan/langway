@@ -28,12 +28,10 @@ import java.util.Set;
 
 public class PathActivity extends AppCompatActivity {
 
-    // ── Intent key constants ─────────────────────────────────────────────────
     public static final String EXTRA_LANGUAGES  = "extra_languages";   // ArrayList<String> "Lang|Level"
     public static final String EXTRA_HOBBIES    = "extra_hobbies";     // ArrayList<String>
     public static final String EXTRA_NAME       = "extra_name";        // String
 
-    // ── Language → emoji flag ────────────────────────────────────────────────
     private static final Map<String, String> FLAG_MAP = new HashMap<String, String>() {{
         put("English",    "🇬🇧"); put("Spanish",   "🇪🇸"); put("Russian",   "🇷🇺");
         put("Armenian",   "🇦🇲"); put("German",    "🇩🇪"); put("French",    "🇫🇷");
@@ -42,8 +40,6 @@ public class PathActivity extends AppCompatActivity {
         put("Dutch",      "🇳🇱"); put("Swedish",   "🇸🇪"); put("Turkish",   "🇹🇷");
     }};
 
-    // ── Hobby → field label (maps interest areas to language path types) ─────
-    // Each entry: hobby keyword → list of recommended path "types"
     private static final Map<String, List<String>> HOBBY_PATH_MAP = new HashMap<String, List<String>>() {{
         put("Gaming",      Arrays.asList("Gaming & Esports",   "Online Communities", "Tech Slang"));
         put("Technology",  Arrays.asList("Technical English",  "Tech Jargon",        "STEM Communication"));
@@ -67,7 +63,6 @@ public class PathActivity extends AppCompatActivity {
         put("Reading",     Arrays.asList("Academic",           "Literary Analysis",  "Creative Writing"));
     }};
 
-    // ── Which languages are trending in which hobby fields ───────────────────
     private static final Map<String, Set<String>> TRENDING_MAP = new HashMap<String, Set<String>>() {{
         put("Technology",  new HashSet<>(Arrays.asList("English", "Mandarin", "German")));
         put("Gaming",      new HashSet<>(Arrays.asList("English", "Korean", "Japanese")));
@@ -87,7 +82,6 @@ public class PathActivity extends AppCompatActivity {
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_path);
 
-        // Push "Let's Go" button above the OS navigation bar
         com.google.android.material.button.MaterialButton startBtn =
                 findViewById(R.id.path_start_btn);
         ViewCompat.setOnApplyWindowInsetsListener(startBtn, (v, windowInsets) -> {
@@ -105,7 +99,6 @@ public class PathActivity extends AppCompatActivity {
                 ? getIntent().getStringArrayListExtra(EXTRA_HOBBIES) : new ArrayList<>();
         String name                  = getIntent().getStringExtra(EXTRA_NAME);
 
-        // ── Personalise header ────────────────────────────────────────────────
         TextView greetingView = findViewById(R.id.path_greeting);
         TextView titleView    = findViewById(R.id.path_title);
         String firstName = (name != null && name.contains(" "))
@@ -114,10 +107,8 @@ public class PathActivity extends AppCompatActivity {
         titleView.setText(hobbies.isEmpty() ? "Tailored just for you"
                 : "Built around your interests");
 
-        // ── Hobby chips in summary card ───────────────────────────────────────
         ChipGroup hobbyChipGroup = findViewById(R.id.path_hobby_chips);
         for (String hobby : hobbies) {
-            // Strip emoji prefix for cleaner display
             String label = hobby.contains(" ") ? hobby.substring(hobby.indexOf(" ") + 1) : hobby;
             Chip chip = new Chip(this);
             chip.setText(label);
@@ -130,11 +121,9 @@ public class PathActivity extends AppCompatActivity {
             hobbyChipGroup.addView(chip);
         }
 
-        // ── Build path cards ──────────────────────────────────────────────────
         LinearLayout container = findViewById(R.id.path_cards_container);
         LayoutInflater inflater = LayoutInflater.from(this);
 
-        // Collect all path types from hobbies
         List<String> allPathTypes = new ArrayList<>();
         Set<String> trendingLangs = new HashSet<>();
         for (String hobby : hobbies) {
@@ -144,14 +133,14 @@ public class PathActivity extends AppCompatActivity {
             Set<String> trending = TRENDING_MAP.get(key);
             if (trending != null) trendingLangs.addAll(trending);
         }
-        // Deduplicate path types, keep first 3
+
         List<String> dedupedTypes = new ArrayList<>();
         Set<String> seen = new HashSet<>();
         for (String t : allPathTypes) {
             if (seen.add(t)) dedupedTypes.add(t);
             if (dedupedTypes.size() >= 3) break;
         }
-        // Fallback if no hobbies selected
+
         if (dedupedTypes.isEmpty()) {
             dedupedTypes.add("Conversational");
             dedupedTypes.add("Everyday Phrases");
@@ -167,20 +156,17 @@ public class PathActivity extends AppCompatActivity {
 
             View card = inflater.inflate(R.layout.item_path_card, container, false);
 
-            // Icon / flag
             ((TextView) card.findViewById(R.id.path_card_icon))
                     .setText(FLAG_MAP.getOrDefault(lang, "🌐"));
             ((TextView) card.findViewById(R.id.path_card_language)).setText(lang);
             ((TextView) card.findViewById(R.id.path_card_proficiency)).setText(level);
 
-            // Trending badge
             TextView trendBadge = card.findViewById(R.id.path_card_trend_badge);
             if (trendingLangs.contains(lang)) {
                 trendBadge.setText("🔥 Trending");
                 trendBadge.setVisibility(View.VISIBLE);
             }
 
-            // Path type chips
             ChipGroup chipGroup = card.findViewById(R.id.path_card_types);
             List<String> cardTypes = buildCardTypes(lang, level, dedupedTypes);
             for (String type : cardTypes) {
@@ -195,11 +181,9 @@ public class PathActivity extends AppCompatActivity {
                 chipGroup.addView(chip);
             }
 
-            // Reason text
             ((TextView) card.findViewById(R.id.path_card_reason))
                     .setText(buildReason(lang, level, hobbies));
 
-            // Staggered entrance
             card.setAlpha(0f);
             card.setTranslationY(24f);
             final long delay = 200 + cardIndex * 100L;
@@ -211,7 +195,6 @@ public class PathActivity extends AppCompatActivity {
             cardIndex++;
         }
 
-        // ── "Let's Go" → HomeActivity ─────────────────────────────────────────
         findViewById(R.id.path_start_btn).setOnClickListener(v -> {
             Intent intent = new Intent(this, HomeActivity.class);
             intent.putExtra(HomeActivity.EXTRA_NAME, name);
@@ -222,16 +205,13 @@ public class PathActivity extends AppCompatActivity {
             overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
         });
 
-        // Animate header
         View header = findViewById(R.id.path_header);
         header.setAlpha(0f);
         header.animate().alpha(1f).setDuration(500).start();
     }
 
-    // ── Build context-aware path types per language ───────────────────────────
     private List<String> buildCardTypes(String lang, String level, List<String> basePaths) {
         List<String> result = new ArrayList<>();
-        // Prefix path type with language-specific qualifier based on level
         String qualifier;
         if (level.startsWith("A")) qualifier = "Practical ";
         else if (level.startsWith("B")) qualifier = "Conversational ";
@@ -239,12 +219,11 @@ public class PathActivity extends AppCompatActivity {
 
         for (String base : basePaths) {
             result.add(qualifier + lang + " – " + base);
-            if (result.size() >= 2) break; // max 2 chips per card to keep it clean
+            if (result.size() >= 2) break;
         }
         return result;
     }
 
-    // ── Generate a personalised reason sentence ───────────────────────────────
     private String buildReason(String lang, String level, List<String> hobbies) {
         String hobbySnippet = "";
         if (!hobbies.isEmpty()) {
@@ -266,9 +245,7 @@ public class PathActivity extends AppCompatActivity {
                 + " and focuses on real-world fluency you can use straight away.";
     }
 
-    /** Extract the bare hobby keyword (strip emoji + leading space) */
     private String extractHobbyKey(String hobby) {
-        // HOBBIES strings look like "🎮 Gaming" — take the word after the space
         if (hobby.contains(" ")) {
             return hobby.substring(hobby.indexOf(" ") + 1).trim();
         }

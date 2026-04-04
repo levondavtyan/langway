@@ -15,10 +15,6 @@ import com.google.android.material.button.MaterialButton;
 import java.util.LinkedHashMap;
 import java.util.List;
 
-/**
- * Custom adapter for the language list in LanguageFragment.
- * Displays language name + proficiency, and a styled Remove button.
- */
 public class LanguageListAdapter extends ArrayAdapter<String> {
 
     private final LinkedHashMap<String, String> proficiencyMap;
@@ -69,7 +65,6 @@ public class LanguageListAdapter extends ArrayAdapter<String> {
             if (lang != null) onRemove.remove(lang);
         });
 
-        // Staggered fade-in for newly added items
         convertView.setAlpha(0f);
         convertView.animate()
                 .alpha(1f)

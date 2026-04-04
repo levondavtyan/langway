@@ -6,7 +6,6 @@
     android:layout_height="match_parent"
     android:background="@color/background">
 
-    <!-- Top bar -->
     <LinearLayout
         android:id="@+id/chat_top_bar"
         android:layout_width="0dp"
@@ -22,17 +21,15 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <!-- Back button -->
         <ImageButton
             android:id="@+id/chat_back_btn"
             android:layout_width="40dp"
             android:layout_height="40dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:src="@android:drawable/ic_media_previous"
-            android:tint="@color/white"
-            android:contentDescription="Back" />
+            android:contentDescription="Back"
+            app:tint="@color/white" />
 
-        <!-- Avatar -->
         <FrameLayout
             android:layout_width="40dp"
             android:layout_height="40dp"
@@ -83,7 +80,6 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Messages list -->
     <androidx.core.widget.NestedScrollView
         android:id="@+id/chat_scroll"
         android:layout_width="0dp"
@@ -106,7 +102,6 @@
 
     </androidx.core.widget.NestedScrollView>
 
-    <!-- Input bar -->
     <LinearLayout
         android:id="@+id/chat_input_bar"
         android:layout_width="0dp"

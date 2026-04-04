@@ -69,11 +69,9 @@ public class ChatActivity extends AppCompatActivity {
         String otherLangs = getIntent().getStringExtra(EXTRA_OTHER_LANGS);
         String otherPhoto = getIntent().getStringExtra(EXTRA_OTHER_PHOTO);
 
-        // Top bar setup
         ((TextView) findViewById(R.id.chat_other_name)).setText(otherName);
         ((TextView) findViewById(R.id.chat_other_langs)).setText(otherLangs != null ? otherLangs : "");
 
-        // Initials or photo
         TextView initialsView = findViewById(R.id.chat_other_initials);
         ImageView photoView   = findViewById(R.id.chat_other_photo);
         String initials = "?";
@@ -98,7 +96,6 @@ public class ChatActivity extends AppCompatActivity {
         scrollView        = findViewById(R.id.chat_scroll);
         inputField        = findViewById(R.id.chat_input);
 
-        // Inset on input bar
         LinearLayout inputBar = findViewById(R.id.chat_input_bar);
         ViewCompat.setOnApplyWindowInsetsListener(inputBar, (v, wi) -> {
             Insets ins = wi.getInsets(WindowInsetsCompat.Type.systemBars());
@@ -106,7 +103,6 @@ public class ChatActivity extends AppCompatActivity {
             return wi;
         });
 
-        // Inset on top bar
         LinearLayout topBar = findViewById(R.id.chat_top_bar);
         ViewCompat.setOnApplyWindowInsetsListener(topBar, (v, wi) -> {
             Insets ins = wi.getInsets(WindowInsetsCompat.Type.systemBars());
@@ -134,11 +130,9 @@ public class ChatActivity extends AppCompatActivity {
 
         FirebaseFirestore db = FirebaseFirestore.getInstance();
 
-        // Write message to subcollection
         db.collection("chats").document(chatId)
                 .collection("messages").add(msg);
 
-        // Update lastMessage on the chat doc for ChatsFragment preview
         Map<String, Object> update = new HashMap<>();
         update.put("lastMessage",  text);
         update.put("lastTimestamp", Timestamp.now());
@@ -189,7 +183,6 @@ public class ChatActivity extends AppCompatActivity {
         params.weight  = 0;
         bubble.setMaxWidth(dp(260));
 
-        // Wrap in a full-width container so gravity works
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
@@ -201,7 +194,6 @@ public class ChatActivity extends AppCompatActivity {
 
         row.addView(bubble, params);
 
-        // Entrance animation
         row.setAlpha(0f);
         row.setTranslationY(8f);
         row.animate().alpha(1f).translationY(0f)

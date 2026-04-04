@@ -56,7 +56,6 @@ public class LoginFragment extends Fragment {
         animateIn(binding.tilConfirmPassword,220);
         animateIn(binding.signInLink,        290);
 
-        // Cache every keystroke so values survive view destruction
         TextWatcher cacher = new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int i, int c, int a) {}
             @Override public void onTextChanged(CharSequence s, int i, int b, int c) {}
@@ -91,7 +90,6 @@ public class LoginFragment extends Fragment {
         });
     }
 
-    // ── Called live as user types confirm field ───────────────────────────────
     private void validateConfirm() {
         if (binding == null) return;
         String pw  = safeText(binding.password);
@@ -103,7 +101,6 @@ public class LoginFragment extends Fragment {
         }
     }
 
-    // ── Accessors used by MainActivity ───────────────────────────────────────
 
     public boolean isValid() {
         if (!cachedFullName.isEmpty() && !cachedEmail.isEmpty()
@@ -122,7 +119,6 @@ public class LoginFragment extends Fragment {
     public String getEmail()    { return cachedEmail; }
     public String getPassword() { return cachedPassword; }
 
-    // ─────────────────────────────────────────────────────────────────────────
 
     private String safeText(android.widget.EditText et) {
         return et.getText() != null ? et.getText().toString().trim() : "";

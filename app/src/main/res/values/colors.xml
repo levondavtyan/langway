@@ -1,46 +1,46 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- ── Core brand ── -->
-    <color name="brand_green">#00C896</color>       <!-- Vivid mint-green -->
-    <color name="brand_green_dark">#00A87A</color>  <!-- Pressed state -->
-    <color name="brand_green_light">#DFFAF3</color> <!-- Tinted surface / chip bg -->
+    <!-- Core brand -->
+    <color name="brand_green">#00C896</color>
+    <color name="brand_green_dark">#00A87A</color>
+    <color name="brand_green_light">#DFFAF3</color>
 
-    <color name="brand_blue">#2979FF</color>        <!-- Electric blue accent -->
+    <color name="brand_blue">#2979FF</color>
     <color name="brand_blue_dark">#1A56CC</color>
     <color name="brand_blue_light">#E3ECFF</color>
 
-    <!-- ── Background / surface ── -->
-    <color name="background">#F5FFFE</color>        <!-- Almost white, greenish -->
+    <!-- Background / surface -->
+    <color name="background">#F5FFFE</color>
     <color name="surface">#FFFFFF</color>
     <color name="surface_variant">#EEF9F6</color>
 
-    <!-- ── Text ── -->
+    <!-- Text -->
     <color name="text_primary">#0D2626</color>
     <color name="text_secondary">#3D6060</color>
     <color name="text_hint">#8BBCB8</color>
     <color name="text_on_brand">#FFFFFF</color>
 
-    <!-- ── UI chrome ── -->
+    <!-- UI chrome -->
     <color name="divider">#C8EDE7</color>
     <color name="outline">#B2DDD6</color>
     <color name="header_gradient_start">#00C896</color>
     <color name="header_gradient_end">#2979FF</color>
 
-    <!-- ── Buttons ── -->
+    <!-- Buttons -->
     <color name="button_primary">#00C896</color>
     <color name="button_primary_disabled">#A3E8D8</color>
     <color name="button_secondary_text">#00A87A</color>
 
-    <!-- ── Spinner / dropdown ── -->
+    <!-- Spinner / dropdown -->
     <color name="spinner_bg">#FFFFFF</color>
     <color name="spinner_border">#B2DDD6</color>
 
-    <!-- ── Language list item ── -->
+    <!-- Language list item -->
     <color name="item_bg">#F0FBF8</color>
     <color name="item_border">#C8EDE7</color>
     <color name="remove_btn">#FF5C7A</color>
 
-    <!-- ── Legacy aliases kept for any refs that may still exist ── -->
+    <!-- Legacy aliases kept for any refs that may still exist -->
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFF</color>
     <color name="soft_linen">#DFFAF3</color>

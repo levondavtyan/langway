@@ -44,7 +44,6 @@ public class SignInActivity extends AppCompatActivity {
         backBtn           = findViewById(R.id.signin_back_btn);
         forgotPasswordLink = findViewById(R.id.signin_forgot_password);
 
-        // Push bottom bar above OS navigation bar
         LinearLayout bottomBar = findViewById(R.id.signin_bottom_bar);
         ViewCompat.setOnApplyWindowInsetsListener(bottomBar, (v, windowInsets) -> {
             Insets insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());

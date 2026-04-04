@@ -7,10 +7,7 @@ import androidx.annotation.NonNull;
 import com.levon.davtyan.langway.data.LoginDataSource;
 import com.levon.davtyan.langway.data.LoginRepository;
 
-/**
- * ViewModel provider factory to instantiate LoginViewModel.
- * Required given LoginViewModel has a non-empty constructor
- */
+
 public class LoginViewModelFactory implements ViewModelProvider.Factory {
 
     @NonNull

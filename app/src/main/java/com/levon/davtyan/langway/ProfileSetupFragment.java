@@ -44,7 +44,6 @@ public class ProfileSetupFragment extends Fragment {
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Register gallery picker — must be done in onCreate, before onStart
         galleryLauncher = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
                 result -> {
@@ -55,13 +54,10 @@ public class ProfileSetupFragment extends Fragment {
                     try {
                         InputStream is = requireContext().getContentResolver().openInputStream(uri);
                         Bitmap raw = BitmapFactory.decodeStream(is);
-                        // Scale down to max 512px on the longest side to keep Firestore doc small
                         cachedBitmap = scaleBitmap(raw, 512);
-                        // Encode to Base64 JPEG
                         ByteArrayOutputStream bos = new ByteArrayOutputStream();
                         cachedBitmap.compress(Bitmap.CompressFormat.JPEG, 80, bos);
                         cachedPhotoB64 = Base64.encodeToString(bos.toByteArray(), Base64.DEFAULT);
-                        // Show in UI
                         applyAvatarImage();
                     } catch (Exception e) {
                         e.printStackTrace();
@@ -85,11 +81,9 @@ public class ProfileSetupFragment extends Fragment {
         avatarInitials = view.findViewById(R.id.setup_avatar_initials);
         bioField       = view.findViewById(R.id.setup_bio);
 
-        // Restore cached state
         if (!cachedBio.isEmpty()) bioField.setText(cachedBio);
         if (cachedBitmap != null) applyAvatarImage();
 
-        // Cache bio on every keystroke
         bioField.addTextChangedListener(new android.text.TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int i, int c, int a) {}
             @Override public void onTextChanged(CharSequence s, int i, int b, int c) {}
@@ -98,7 +92,6 @@ public class ProfileSetupFragment extends Fragment {
             }
         });
 
-        // Tap avatar circle → open gallery
         View avatarContainer = view.findViewById(R.id.setup_avatar_container);
         avatarContainer.setOnClickListener(v -> {
             Intent pick = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
@@ -106,23 +99,17 @@ public class ProfileSetupFragment extends Fragment {
             galleryLauncher.launch(pick);
         });
 
-        // Entrance animations
         animateIn(view.findViewById(R.id.setup_subtitle), 0);
         animateIn(avatarContainer, 80);
         animateIn(view.findViewById(R.id.setup_bio_card), 180);
     }
 
-    // ── Accessors for MainActivity ────────────────────────────────────────────
-
-    /** Bio is optional — always valid. */
     public boolean isValid() { return true; }
 
     public String getBio() { return cachedBio; }
 
-    /** Returns Base64-encoded JPEG string, or null if no photo was chosen. */
     public String getPhotoBase64() { return cachedPhotoB64; }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private void applyAvatarImage() {
         if (avatarImage == null) return;

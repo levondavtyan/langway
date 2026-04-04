@@ -16,7 +16,6 @@
         android:paddingTop="12dp"
         android:paddingBottom="32dp">
 
-        <!-- Subtitle -->
         <TextView
             android:id="@+id/setup_subtitle"
             android:layout_width="wrap_content"
@@ -27,7 +26,6 @@
             android:textSize="13sp"
             android:alpha="0" />
 
-        <!-- Avatar picker -->
         <FrameLayout
             android:id="@+id/setup_avatar_container"
             android:layout_width="120dp"
@@ -39,13 +37,11 @@
             android:foreground="?attr/selectableItemBackgroundBorderless"
             android:alpha="0">
 
-            <!-- Gradient circle background -->
             <View
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:background="@drawable/bg_avatar_setup_circle" />
 
-            <!-- Initials shown before a photo is picked -->
             <TextView
                 android:id="@+id/setup_avatar_initials"
                 android:layout_width="match_parent"
@@ -54,7 +50,6 @@
                 android:text="📷"
                 android:textSize="36sp" />
 
-            <!-- Photo fills the circle once chosen -->
             <ImageView
                 android:id="@+id/setup_avatar_image"
                 android:layout_width="match_parent"
@@ -63,7 +58,6 @@
                 android:background="@drawable/bg_avatar_setup_circle"
                 android:visibility="gone" />
 
-            <!-- Camera badge overlay -->
             <TextView
                 android:layout_width="32dp"
                 android:layout_height="32dp"
@@ -76,7 +70,6 @@
 
         </FrameLayout>
 
-        <!-- Tap hint -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -86,7 +79,6 @@
             android:textColor="@color/text_hint"
             android:textSize="12sp" />
 
-        <!-- Bio card -->
         <androidx.cardview.widget.CardView
             android:id="@+id/setup_bio_card"
             android:layout_width="match_parent"

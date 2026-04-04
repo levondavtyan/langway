@@ -6,7 +6,6 @@
     android:orientation="horizontal"
     android:padding="4dp">
 
-    <!-- Bubble — gravity controlled in code (start=theirs, end=mine) -->
     <TextView
         android:id="@+id/message_bubble"
         android:layout_width="wrap_content"

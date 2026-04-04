@@ -55,20 +55,16 @@ public class MainActivity extends AppCompatActivity {
             new ProfileSetupFragment()
     };
     private int currentIndex = 0;
-    private String pendingUid = null; // set after step-1 Firebase Auth creation
+    private String pendingUid = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // ── If already signed in, skip registration entirely ─────────────────
-        // This is the main guard: every time the app starts, we check Firebase
-        // Auth's persisted session. If a user is logged in, we go straight to
-        // HomeActivity — the registration screen should never be reachable.
         FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
         if (currentUser != null) {
             goToHome(currentUser.getDisplayName(), null, null);
-            return; // Don't inflate or set up anything else
+            return;
         }
 
         EdgeToEdge.enable(this);
@@ -113,13 +109,6 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    /**
-     * Called when Next is tapped on step 1 (who are you?).
-     * Creates the Firebase Auth user immediately — this is the ONLY place
-     * createUserWithEmailAndPassword is called. If the email already exists,
-     * FirebaseAuthUserCollisionException fires here and we show the dialog.
-     * On success, we store the UID and advance to step 2.
-     */
     private void registerAtStepOne() {
         LoginFragment loginFrag = (LoginFragment) fragments[0];
         final String email    = loginFrag.getEmail();
@@ -146,14 +135,11 @@ public class MainActivity extends AppCompatActivity {
                         return;
                     }
 
-                    // Auth user created — store the UID for onFinish() to use,
-                    // set the display name right away
                     pendingUid = task.getResult().getUser().getUid();
                     task.getResult().getUser()
                             .updateProfile(new UserProfileChangeRequest.Builder()
                                     .setDisplayName(name).build());
 
-                    // Advance to step 2
                     currentIndex++;
                     showFragment(currentIndex, true, false);
                 });
@@ -161,8 +147,6 @@ public class MainActivity extends AppCompatActivity {
 
     private void onFinish() {
         Log.d(TAG, "onFinish called, pendingUid=" + pendingUid);
-        // Auth user was already created at step 1 — pendingUid holds their UID.
-        // Here we collect all profile data, write it to Firestore, then navigate.
         LoginFragment        loginFrag   = (LoginFragment)        fragments[0];
         LanguageFragment     langFrag    = (LanguageFragment)     fragments[1];
         HobbiesFragment      hobbiesFrag = (HobbiesFragment)      fragments[2];
@@ -229,7 +213,6 @@ public class MainActivity extends AppCompatActivity {
                 });
     }
 
-    /** Shown when an already-registered email is used for sign-up. */
     private void showAlreadyExistsDialog() {
         new MaterialAlertDialogBuilder(this)
                 .setTitle("Account already exists")
@@ -243,10 +226,7 @@ public class MainActivity extends AppCompatActivity {
                 .show();
     }
 
-    /** Navigate to HomeActivity, loading user data from Firestore if needed. */
     private void goToHome(String name, ArrayList<String> languages, ArrayList<String> hobbies) {
-        // If we have no languages/hobbies (coming from a persisted session),
-        // HomeActivity's fragments will load them from Firestore directly.
         Intent intent = new Intent(this, HomeActivity.class);
         if (name    != null) intent.putExtra(HomeActivity.EXTRA_NAME, name);
         if (languages != null) intent.putStringArrayListExtra(HomeActivity.EXTRA_LANGUAGES, languages);

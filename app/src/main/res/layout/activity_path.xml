@@ -6,7 +6,6 @@
     android:layout_height="match_parent"
     android:background="@color/background">
 
-    <!-- Gradient header (same DNA as registration) -->
     <FrameLayout
         android:id="@+id/path_header"
         android:layout_width="0dp"
@@ -48,7 +47,6 @@
         </LinearLayout>
     </FrameLayout>
 
-    <!-- Floating card that overlaps the header -->
     <androidx.cardview.widget.CardView
         android:id="@+id/path_summary_card"
         android:layout_width="0dp"
@@ -81,7 +79,6 @@
                 android:textSize="13sp"
                 android:lineSpacingMultiplier="1.4" />
 
-            <!-- Hobby tags row (filled programmatically) -->
             <com.google.android.material.chip.ChipGroup
                 android:id="@+id/path_hobby_chips"
                 android:layout_width="match_parent"
@@ -93,7 +90,6 @@
         </LinearLayout>
     </androidx.cardview.widget.CardView>
 
-    <!-- Scrollable list of path cards -->
     <androidx.core.widget.NestedScrollView
         android:id="@+id/path_scroll"
         android:layout_width="0dp"
@@ -117,7 +113,6 @@
 
     </androidx.core.widget.NestedScrollView>
 
-    <!-- "Let's Go" button pinned at bottom -->
     <com.google.android.material.button.MaterialButton
         android:id="@+id/path_start_btn"
         style="@style/Widget.Langway.Button"

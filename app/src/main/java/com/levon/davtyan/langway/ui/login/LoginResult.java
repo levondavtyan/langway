@@ -2,9 +2,7 @@ package com.levon.davtyan.langway.ui.login;
 
 import androidx.annotation.Nullable;
 
-/**
- * Authentication result : success (user details) or error message.
- */
+
 class LoginResult {
     @Nullable
     private LoggedInUserView success;

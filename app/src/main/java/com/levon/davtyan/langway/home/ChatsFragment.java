@@ -59,7 +59,6 @@ public class ChatsFragment extends Fragment {
     }
 
     private void listenForChats() {
-        // Listen to all chats where myUid is a participant, ordered by last message time
         chatsListener = FirebaseFirestore.getInstance()
                 .collection("chats")
                 .whereArrayContains("participants", myUid)
@@ -83,7 +82,6 @@ public class ChatsFragment extends Fragment {
                         Object ts          = data.get("lastTimestamp");
                         String timeStr     = formatTimestamp(ts);
 
-                        // Find the other participant's UID and info
                         Object partsObj = data.get("participants");
                         String otherUid = "";
                         if (partsObj instanceof java.util.List) {
@@ -92,7 +90,6 @@ public class ChatsFragment extends Fragment {
                             }
                         }
 
-                        // Names/photos stored in the chat doc for quick display
                         Map<?, ?> names  = (Map<?, ?>) data.get("participantNames");
                         Map<?, ?> photos = (Map<?, ?>) data.get("participantPhotos");
                         String otherName  = names  != null ? str(names,  otherUid, "Unknown") : "Unknown";
@@ -116,7 +113,6 @@ public class ChatsFragment extends Fragment {
         ((TextView) row.findViewById(R.id.chat_row_last_msg)).setText(lastMsg);
         ((TextView) row.findViewById(R.id.chat_row_time)).setText(timeStr);
 
-        // Initials
         TextView initialsView = row.findViewById(R.id.chat_row_initials);
         String[] parts = otherName.trim().split("\\s+");
         String initials = parts.length >= 2
@@ -124,7 +120,6 @@ public class ChatsFragment extends Fragment {
                 : otherName.substring(0, Math.min(2, otherName.length())).toUpperCase();
         initialsView.setText(initials);
 
-        // Photo
         if (!otherPhoto.isEmpty()) {
             try {
                 byte[] bytes = Base64.decode(otherPhoto, Base64.DEFAULT);
@@ -136,7 +131,6 @@ public class ChatsFragment extends Fragment {
             } catch (Exception ignored) {}
         }
 
-        // Open ChatActivity on tap
         final String fOtherPhoto = otherPhoto;
         final String fOtherLangs = otherLangs;
         final String fOtherName  = otherName;
@@ -150,7 +144,6 @@ public class ChatsFragment extends Fragment {
             startActivity(intent);
         });
 
-        // Staggered entrance
         row.setAlpha(0f);
         row.animate().alpha(1f).setDuration(250).setStartDelay(50L * index)
                 .setInterpolator(new DecelerateInterpolator()).start();

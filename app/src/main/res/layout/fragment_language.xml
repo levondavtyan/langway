@@ -11,11 +11,7 @@
     android:clipToPadding="false"
     tools:context=".LanguageFragment">
 
-    <!--
-        clipToPadding="false" on both this ScrollView and the inner LinearLayout
-        lets CardView's elevation shadow render fully on all four sides instead
-        of being clipped at the edges.
-    -->
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -26,7 +22,6 @@
         android:paddingTop="4dp"
         android:paddingBottom="24dp">
 
-        <!-- ── Picker card — horizontal margin gives shadow room on left/right ── -->
         <androidx.cardview.widget.CardView
             android:id="@+id/constraintLayout"
             android:layout_width="match_parent"
@@ -96,7 +91,6 @@
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
-        <!-- "Added languages" label -->
         <TextView
             android:id="@+id/added_label"
             android:layout_width="wrap_content"
@@ -108,11 +102,6 @@
             android:textSize="13sp"
             android:alpha="0" />
 
-        <!--
-            Items are inflated into this container by LanguageFragment.rebuildList().
-            Each item has layout_marginBottom set in language_item_layout.xml for spacing.
-            clipToPadding="false" lets item card shadows show fully.
-        -->
         <LinearLayout
             android:id="@+id/languages_list_container"
             android:layout_width="match_parent"

@@ -24,8 +24,6 @@ public class LanguageFragment extends Fragment {
 
     private FragmentLanguageBinding binding;
 
-    // Survives view destroy/recreate (back navigation) because it's an instance field,
-    // not recreated in onCreateView. This is why items reappear correctly.
     private final LinkedHashMap<String, String> selectedLanguages = new LinkedHashMap<>();
 
     private static final String[] LANGUAGES = {
@@ -57,7 +55,6 @@ public class LanguageFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        // Spinners
         ArrayAdapter<String> langAdapter = new ArrayAdapter<>(
                 requireContext(), android.R.layout.simple_spinner_item, LANGUAGES);
         langAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
@@ -68,7 +65,6 @@ public class LanguageFragment extends Fragment {
         profAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         binding.proficiencySpinner.setAdapter(profAdapter);
 
-        // ── Add / Update button ──────────────────────────────────────────────
         binding.addButton.setOnClickListener(v -> {
             String lang  = binding.languageSpinner.getSelectedItem().toString();
             String level = binding.proficiencySpinner.getSelectedItem().toString();
@@ -76,12 +72,10 @@ public class LanguageFragment extends Fragment {
             if (selectedLanguages.containsKey(lang)) {
                 String existing = selectedLanguages.get(lang);
                 if (level.equals(existing)) {
-                    // Same language, same proficiency — nothing to do
                     Toast.makeText(requireContext(),
                             lang + " is already added with this level.",
                             Toast.LENGTH_SHORT).show();
                 } else {
-                    // Same language, different proficiency — update it
                     selectedLanguages.put(lang, level);
                     rebuildList();
                     Toast.makeText(requireContext(),
@@ -96,7 +90,6 @@ public class LanguageFragment extends Fragment {
             animateAddButton();
         });
 
-        // Entrance animation for the picker card
         binding.constraintLayout.setAlpha(0f);
         binding.constraintLayout.setTranslationY(30f);
         binding.constraintLayout.animate()
@@ -104,23 +97,16 @@ public class LanguageFragment extends Fragment {
                 .setDuration(400).setStartDelay(80)
                 .setInterpolator(new DecelerateInterpolator()).start();
 
-        // ── FIX: rebuild the list immediately so items show after back-navigation ──
-        // The map is preserved (instance field), but the View was destroyed and
-        // recreated, so we must re-inflate all item rows from the existing data.
         rebuildList();
     }
 
-    /** Called by MainActivity before allowing forward navigation. */
     public boolean isValid() {
         return !selectedLanguages.isEmpty();
     }
 
-    /** Returns the full language→proficiency map for use by PathActivity. */
     public LinkedHashMap<String, String> getSelectedLanguages() {
         return selectedLanguages;
     }
-
-    // ── Private helpers ──────────────────────────────────────────────────────
 
     private void rebuildList() {
         if (binding == null) return;
@@ -143,7 +129,6 @@ public class LanguageFragment extends Fragment {
                 rebuildList();
             });
 
-            // Staggered fade-in only for newly built lists (not instant rebuild)
             item.setAlpha(0f);
             item.animate().alpha(1f)
                     .setDuration(220).setStartDelay(i * 40L)
@@ -153,7 +138,6 @@ public class LanguageFragment extends Fragment {
             i++;
         }
 
-        // Show/hide "Added languages" label
         if (selectedLanguages.isEmpty()) {
             binding.addedLabel.animate().alpha(0f).setDuration(200).start();
         } else {

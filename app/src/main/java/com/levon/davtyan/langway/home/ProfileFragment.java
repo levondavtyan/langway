@@ -45,7 +45,6 @@ public class ProfileFragment extends Fragment {
     private static final String TAG = "ProfileFragment";
     private static final String GROK_API_KEY = "YOUR_GROK_API_KEY";
 
-    // Hard colors — not resource refs — so dark mode can't override
     private static final int CHIP_BLUE_BG   = 0xFFE3ECFF;
     private static final int CHIP_BLUE_TEXT = 0xFF1A56CC;
     private static final int CHIP_GREEN_BG  = 0xFFDFFAF3;
@@ -79,7 +78,6 @@ public class ProfileFragment extends Fragment {
         ChipGroup    hobbyChips  = v.findViewById(R.id.profile_hobby_chips);
         MaterialButton signOutBtn = v.findViewById(R.id.profile_sign_out_btn);
 
-        // ── Populate from args immediately (fast, no network) ────────────────
         Bundle args = getArguments();
         String firstName = "";
         List<String> langPairsArg = new ArrayList<>();
@@ -100,7 +98,6 @@ public class ProfileFragment extends Fragment {
             }
         }
 
-        // ── Then load from Firestore (handles sign-in path where args are empty) ─
         final String fFirstName = firstName;
         final List<String> fLangPairs = langPairsArg;
         final List<String> fHobbies   = hobbiesArg;
@@ -121,14 +118,12 @@ public class ProfileFragment extends Fragment {
                         if (displayName != null && !displayName.isEmpty())
                             nameView.setText(displayName);
 
-                        // Bio
                         String bio = doc.getString("bio");
                         if (bio != null && !bio.isEmpty()) {
                             bioView.setText(bio);
                             bioView.setVisibility(View.VISIBLE);
                         }
 
-                        // Profile photo (Base64-encoded JPEG)
                         String photoB64 = doc.getString("photo");
                         if (photoB64 != null && !photoB64.isEmpty()) {
                             try {
@@ -139,7 +134,6 @@ public class ProfileFragment extends Fragment {
                             } catch (Exception ignored) {}
                         }
 
-                        // Build lang pairs list from Firestore Map
                         List<String> langPairs = new ArrayList<>();
                         Object langsObj = doc.get("languages");
                         if (langsObj instanceof Map) {
@@ -166,7 +160,6 @@ public class ProfileFragment extends Fragment {
             buildPathCards(pathCards, fLangPairs, fHobbies, fFirstName);
         }
 
-        // ── Sign out ──────────────────────────────────────────────────────────
         signOutBtn.setOnClickListener(btn -> {
             FirebaseAuth.getInstance().signOut();
             Intent intent = new Intent(requireActivity(), MainActivity.class);
@@ -176,7 +169,6 @@ public class ProfileFragment extends Fragment {
         });
     }
 
-    /** Inflate item_path_card.xml for each language, fire AI for content */
     private void buildPathCards(LinearLayout container, List<String> langPairs,
                                 List<String> hobbies, String firstName) {
         if (!isAdded()) return;
@@ -223,7 +215,6 @@ public class ProfileFragment extends Fragment {
                         return;
                     }
                     reasonView.setText(result[0]);
-                    // result[0]=reason, result[1]=trending ("true"/"false"), result[2..]=labels
                     if ("true".equals(result[1])) {
                         TextView badge = card.findViewById(R.id.path_card_trend_badge);
                         badge.setText("🔥 Trending");

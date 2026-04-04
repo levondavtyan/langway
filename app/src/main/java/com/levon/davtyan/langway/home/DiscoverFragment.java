@@ -64,12 +64,10 @@ public class DiscoverFragment extends Fragment {
     private LinearLayout cardsContainer;
     private LinearLayout emptyState;
 
-    // Loaded once, filtered on chip tap
     private final List<Map<String, Object>> allMatches = new ArrayList<>();
     private String activeFilter = null;
     private AuthStateListener authStateListener;
 
-    // My profile data
     private String       myUid       = "";
     private String       myName      = "";
     private String       myPhoto     = "";
@@ -92,18 +90,14 @@ public class DiscoverFragment extends Fragment {
         cardsContainer = v.findViewById(R.id.discover_cards_container);
         emptyState     = v.findViewById(R.id.discover_empty);
 
-        // Use AuthStateListener so we wait for Firebase to restore the auth session
-        // before touching Firestore. Without this, getCurrentUser() can be null at
-        // fragment creation time even when the user IS logged in.
         authStateListener = firebaseAuth -> {
             if (!isAdded()) return;
-            if (firebaseAuth.getCurrentUser() == null) return; // not signed in yet
+            if (firebaseAuth.getCurrentUser() == null) return;
 
             FirebaseAuth.getInstance().removeAuthStateListener(authStateListener);
             myUid = firebaseAuth.getCurrentUser().getUid();
             Log.d("LangwayDiscover", "AuthState ready, myUid=" + myUid);
 
-            // Now load my own profile, then matching users
             FirebaseFirestore.getInstance().collection("users").document(myUid).get()
                     .addOnSuccessListener(doc -> {
                         if (!isAdded()) return;
@@ -140,7 +134,6 @@ public class DiscoverFragment extends Fragment {
         FirebaseAuth.getInstance().addAuthStateListener(authStateListener);
     }
 
-    // ── Load all users, keep only those who share ≥1 language or hobby ───────
     private void loadMatchingUsers() {
         Log.d("LangwayDiscover", "loadMatchingUsers start, myLangKeys=" + myLangKeys + " myHobbyKeys=" + myHobbyKeys);
         FirebaseFirestore.getInstance().collection("users").get()
@@ -168,7 +161,6 @@ public class DiscoverFragment extends Fragment {
                 });
     }
 
-    /** Returns true if the other user shares at least one language or hobby with me. */
     private boolean hasMatch(Map<String, Object> user) {
         // Language overlap
         Object langsObj = user.get("languages");
@@ -177,7 +169,7 @@ public class DiscoverFragment extends Fragment {
                 if (myLangKeys.contains(key.toString())) return true;
             }
         }
-        // Hobby overlap
+
         List<?> hobbies = (List<?>) user.get("hobbies");
         if (hobbies != null) {
             for (Object h : hobbies) {
@@ -189,7 +181,6 @@ public class DiscoverFragment extends Fragment {
         return false;
     }
 
-    // ── Build filter chips ────────────────────────────────────────────────────
     private void buildFilters() {
         if (!isAdded()) return;
         filterChips.removeAllViews();
@@ -260,7 +251,6 @@ public class DiscoverFragment extends Fragment {
         return false;
     }
 
-    // ── Render cards ──────────────────────────────────────────────────────────
     private void renderCards(List<Map<String, Object>> users) {
         if (!isAdded()) return;
         cardsContainer.removeAllViews();
@@ -283,13 +273,11 @@ public class DiscoverFragment extends Fragment {
         String photoB64  = str(user, "photo", "");
         String storedBio = str(user, "bio", "");
 
-        // Initials
         String[] parts  = name.trim().split("\\s+");
         String initials = parts.length >= 2
                 ? ("" + parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase()
                 : name.substring(0, Math.min(2, name.length())).toUpperCase();
 
-        // Avatar panel gradient
         int[] grad = AVATAR_GRADIENTS[index % AVATAR_GRADIENTS.length];
         View panel = card.findViewById(R.id.person_avatar_panel);
         android.graphics.drawable.GradientDrawable gd =
@@ -300,7 +288,6 @@ public class DiscoverFragment extends Fragment {
 
         ((TextView) card.findViewById(R.id.person_initials)).setText(initials);
 
-        // Photo
         if (!photoB64.isEmpty()) {
             try {
                 byte[] bytes = Base64.decode(photoB64, Base64.DEFAULT);
@@ -312,7 +299,6 @@ public class DiscoverFragment extends Fragment {
             } catch (Exception ignored) {}
         }
 
-        // Languages
         Object langsObj = user.get("languages");
         String firstFlag = "🌐", langLine = "";
         if (langsObj instanceof Map) {
@@ -328,12 +314,10 @@ public class DiscoverFragment extends Fragment {
         ((TextView) card.findViewById(R.id.person_languages)).setText(langLine);
         ((TextView) card.findViewById(R.id.person_name)).setText(name);
 
-        // Bio
         List<?> hobbies = (List<?>) user.get("hobbies");
         String bio = storedBio.isEmpty() ? buildBio(hobbies) : storedBio;
         ((TextView) card.findViewById(R.id.person_bio)).setText(bio);
 
-        // Hobby chips
         ChipGroup chipGroup = card.findViewById(R.id.person_hobby_chips);
         if (hobbies != null) {
             int count = 0;
@@ -345,10 +329,8 @@ public class DiscoverFragment extends Fragment {
             }
         }
 
-        // Online dot for some users
         if (index % 3 == 0) card.findViewById(R.id.person_online_dot).setVisibility(View.VISIBLE);
 
-        // ── Start chatting — create or reuse a Firestore chat doc ────────────
         final String fOtherUid   = otherUid;
         final String fOtherName  = name;
         final String fOtherPhoto = photoB64;
@@ -365,25 +347,17 @@ public class DiscoverFragment extends Fragment {
         cardsContainer.addView(card);
     }
 
-    /**
-     * Creates a deterministic chat ID from the two UIDs (sorted alphabetically so
-     * both users always resolve to the same document), then opens ChatActivity.
-     */
     private void startOrOpenChat(String otherUid, String otherName,
                                  String otherPhoto, String otherLangs) {
-        // Deterministic ID: sort UIDs so the same pair always maps to the same doc
         String[] uids = {myUid, otherUid};
         Arrays.sort(uids);
         String chatId = uids[0] + "_" + uids[1];
 
         FirebaseFirestore db = FirebaseFirestore.getInstance();
 
-        // Create the chat doc if it doesn't exist yet (using set with merge=false is fine;
-        // we check existence first to avoid overwriting lastMessage)
         db.collection("chats").document(chatId).get()
                 .addOnSuccessListener(doc -> {
                     if (!doc.exists()) {
-                        // Build participant name/photo maps for ChatsFragment quick display
                         Map<String, Object> names  = new HashMap<>();
                         Map<String, Object> photos = new HashMap<>();
                         names.put(myUid,    myName);
@@ -412,7 +386,6 @@ public class DiscoverFragment extends Fragment {
                 });
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
     private String buildBio(List<?> hobbies) {
         if (hobbies == null || hobbies.isEmpty())
             return "Language learner looking to connect and practice.";

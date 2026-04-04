@@ -15,7 +15,6 @@ public class LoginDataSource {
         void onError(String errorMessage);
     }
 
-    // ── Sign-in ───────────────────────────────────────────────────────────────
     public void signIn(String email, String password, AuthCallback callback) {
         Log.d(TAG, "signIn() called for: " + email);
         FirebaseAuth.getInstance()
@@ -34,7 +33,6 @@ public class LoginDataSource {
                 });
     }
 
-    // ── Sign-out ──────────────────────────────────────────────────────────────
     public void logout() {
         FirebaseAuth.getInstance().signOut();
     }

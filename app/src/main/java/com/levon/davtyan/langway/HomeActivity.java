@@ -50,7 +50,6 @@ public class HomeActivity extends AppCompatActivity {
         ArrayList<String> languages = getIntent().getStringArrayListExtra(EXTRA_LANGUAGES);
         ArrayList<String> hobbies   = getIntent().getStringArrayListExtra(EXTRA_HOBBIES);
 
-        // Build all three fragments once — they are never destroyed while HomeActivity lives
         Bundle discoverArgs = new Bundle();
         discoverArgs.putString("name", name != null ? name : "");
         if (languages != null) discoverArgs.putStringArrayList("languages", languages);
@@ -67,9 +66,6 @@ public class HomeActivity extends AppCompatActivity {
         profileFrag = new ProfileFragment();
         profileFrag.setArguments(profileArgs);
 
-        // Add all three fragments at once, show only Discover initially.
-        // Using add+hide/show means fragments are NEVER destroyed on tab switch —
-        // their views and loaded data survive indefinitely.
         getSupportFragmentManager().beginTransaction()
                 .add(R.id.home_frame, profileFrag,  "profile")
                 .add(R.id.home_frame, chatsFrag,    "chats")
@@ -81,7 +77,6 @@ public class HomeActivity extends AppCompatActivity {
         currentTab = 0;
         updateNavVisual(0);
 
-        // Push bottom nav above OS nav bar
         LinearLayout bottomNavBar = findViewById(R.id.bottom_nav_bar);
         ViewCompat.setOnApplyWindowInsetsListener(bottomNavBar, (v, windowInsets) -> {
             Insets insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
@@ -105,7 +100,6 @@ public class HomeActivity extends AppCompatActivity {
             default: toShow = discoverFrag; break;
         }
 
-        // Hide all, show the target — fragments keep their state
         getSupportFragmentManager().beginTransaction()
                 .setCustomAnimations(android.R.anim.fade_in, android.R.anim.fade_out)
                 .hide(discoverFrag)

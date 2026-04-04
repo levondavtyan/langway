@@ -11,7 +11,6 @@
     android:paddingEnd="12dp"
     android:paddingBottom="12dp">
 
-    <!-- Colour accent bar on the left -->
     <View
         android:id="@+id/accent_bar"
         android:layout_width="4dp"
