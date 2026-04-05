@@ -13,6 +13,16 @@
         }
       },
       "oauth_client": [],
+      "certificate_hash": [
+        {
+          "certificate_hash": "49:82:10:24:27:5c:62:5d:ee:c5:0f:fc:86:73:e3:7e:61:f1:1d:19",
+          "hash_algorithm": 1
+        },
+        {
+          "certificate_hash": "67:6c:0d:fc:4b:dd:c4:02:28:a7:7b:eb:ea:95:fb:d1:60:86:4a:14:16:86:2c:47:62:13:c3:73:7b:05:53:45",
+          "hash_algorithm": 2
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyCb1anK4xj4u3R-Ok-CyMuoheFuvsQ235w"
