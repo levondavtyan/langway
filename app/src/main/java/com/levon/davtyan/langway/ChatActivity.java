@@ -22,19 +22,15 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.core.widget.NestedScrollView;
 
 import com.google.android.material.textfield.TextInputEditText;
-import com.google.firebase.Timestamp;
 import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.firestore.DocumentChange;
-import com.google.firebase.firestore.FirebaseFirestore;
-import com.google.firebase.firestore.ListenerRegistration;
-import com.google.firebase.firestore.Query;
+import com.google.firebase.database.ChildEventListener;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ServerValue;
 
-import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Date;
 import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 public class ChatActivity extends AppCompatActivity {
@@ -43,11 +39,11 @@ public class ChatActivity extends AppCompatActivity {
     public static final String EXTRA_OTHER_UID  = "other_uid";
     public static final String EXTRA_OTHER_NAME = "other_name";
     public static final String EXTRA_OTHER_LANGS = "other_langs";
-    public static final String EXTRA_OTHER_PHOTO = "other_photo"; // Base64
+    public static final String EXTRA_OTHER_PHOTO = "other_photo";
 
-    private static final int MY_BUBBLE_BG    = 0xFF00C896;
-    private static final int THEIR_BUBBLE_BG = 0xFFF0FBF8;
-    private static final int MY_BUBBLE_TEXT  = 0xFFFFFFFF;
+    private static final int MY_BUBBLE_BG     = 0xFF00C896;
+    private static final int THEIR_BUBBLE_BG  = 0xFFF0FBF8;
+    private static final int MY_BUBBLE_TEXT   = 0xFFFFFFFF;
     private static final int THEIR_BUBBLE_TEXT = 0xFF0D2626;
 
     private String myUid;
@@ -55,7 +51,8 @@ public class ChatActivity extends AppCompatActivity {
     private LinearLayout messagesContainer;
     private NestedScrollView scrollView;
     private TextInputEditText inputField;
-    private ListenerRegistration messageListener;
+    private ChildEventListener messageListener;
+    private DatabaseReference messagesRef;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -111,8 +108,12 @@ public class ChatActivity extends AppCompatActivity {
         });
 
         ((ImageButton) findViewById(R.id.chat_back_btn)).setOnClickListener(v -> finish());
-
         findViewById(R.id.chat_send_btn).setOnClickListener(v -> sendMessage());
+
+        messagesRef = FirebaseDatabase.getInstance()
+                .getReference("chats")
+                .child(chatId)
+                .child("messages");
 
         listenForMessages();
     }
@@ -126,38 +127,37 @@ public class ChatActivity extends AppCompatActivity {
         Map<String, Object> msg = new HashMap<>();
         msg.put("senderUid", myUid);
         msg.put("text",      text);
-        msg.put("timestamp", Timestamp.now());
+        msg.put("timestamp", ServerValue.TIMESTAMP);
 
-        FirebaseFirestore db = FirebaseFirestore.getInstance();
-
-        db.collection("chats").document(chatId)
-                .collection("messages").add(msg);
+        messagesRef.push().setValue(msg);
 
         Map<String, Object> update = new HashMap<>();
-        update.put("lastMessage",  text);
-        update.put("lastTimestamp", Timestamp.now());
-        db.collection("chats").document(chatId).update(update);
+        update.put("lastMessage",   text);
+        update.put("lastTimestamp", ServerValue.TIMESTAMP);
+        FirebaseDatabase.getInstance()
+                .getReference("chats")
+                .child(chatId)
+                .updateChildren(update);
     }
 
     private void listenForMessages() {
-        messageListener = FirebaseFirestore.getInstance()
-                .collection("chats").document(chatId)
-                .collection("messages")
-                .orderBy("timestamp", Query.Direction.ASCENDING)
-                .addSnapshotListener((snapshots, e) -> {
-                    if (e != null || snapshots == null) return;
-                    for (DocumentChange dc : snapshots.getDocumentChanges()) {
-                        if (dc.getType() == DocumentChange.Type.ADDED) {
-                            Map<String, Object> data = dc.getDocument().getData();
-                            String sender = (String) data.get("senderUid");
-                            String text   = (String) data.get("text");
-                            boolean isMe  = myUid.equals(sender);
-                            addBubble(text != null ? text : "", isMe);
-                        }
-                    }
-                    // Scroll to bottom
-                    scrollView.post(() -> scrollView.fullScroll(View.FOCUS_DOWN));
-                });
+        messageListener = new ChildEventListener() {
+            @Override
+            public void onChildAdded(DataSnapshot snapshot, String previousChildName) {
+                String sender = snapshot.child("senderUid").getValue(String.class);
+                String text   = snapshot.child("text").getValue(String.class);
+                boolean isMe  = myUid.equals(sender);
+                addBubble(text != null ? text : "", isMe);
+                scrollView.post(() -> scrollView.fullScroll(View.FOCUS_DOWN));
+            }
+
+            @Override public void onChildChanged(DataSnapshot s, String p) {}
+            @Override public void onChildRemoved(DataSnapshot s) {}
+            @Override public void onChildMoved(DataSnapshot s, String p) {}
+            @Override public void onCancelled(DatabaseError error) {}
+        };
+
+        messagesRef.orderByChild("timestamp").addChildEventListener(messageListener);
     }
 
     private void addBubble(String text, boolean isMe) {
@@ -209,6 +209,6 @@ public class ChatActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        if (messageListener != null) messageListener.remove();
+        if (messageListener != null) messagesRef.removeEventListener(messageListener);
     }
 }

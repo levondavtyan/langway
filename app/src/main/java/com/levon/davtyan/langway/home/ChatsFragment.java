@@ -5,7 +5,6 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Bundle;
 import android.util.Base64;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -19,23 +18,24 @@ import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
 import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.firestore.FirebaseFirestore;
-import com.google.firebase.firestore.ListenerRegistration;
-import com.google.firebase.firestore.Query;
-import com.google.firebase.firestore.QueryDocumentSnapshot;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
 import com.levon.davtyan.langway.ChatActivity;
 import com.levon.davtyan.langway.R;
 
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 
 public class ChatsFragment extends Fragment {
 
     private LinearLayout listContainer;
     private LinearLayout emptyState;
-    private ListenerRegistration chatsListener;
+    private ValueEventListener chatsListener;
     private String myUid;
 
     @Nullable
@@ -59,49 +59,73 @@ public class ChatsFragment extends Fragment {
     }
 
     private void listenForChats() {
-        chatsListener = FirebaseFirestore.getInstance()
-                .collection("chats")
-                .whereArrayContains("participants", myUid)
-                .orderBy("lastTimestamp", Query.Direction.DESCENDING)
-                .addSnapshotListener((snapshots, e) -> {
-                    if (!isAdded() || snapshots == null) return;
-                    listContainer.removeAllViews();
+        chatsListener = new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                if (!isAdded()) return;
+                listContainer.removeAllViews();
 
-                    if (snapshots.isEmpty()) {
-                        emptyState.setVisibility(View.VISIBLE);
-                        return;
-                    }
-                    emptyState.setVisibility(View.GONE);
-
-                    LayoutInflater inflater = LayoutInflater.from(requireContext());
-                    int idx = 0;
-                    for (QueryDocumentSnapshot doc : snapshots) {
-                        Map<String, Object> data = doc.getData();
-                        String chatId      = doc.getId();
-                        String lastMsg     = str(data, "lastMessage", "No messages yet");
-                        Object ts          = data.get("lastTimestamp");
-                        String timeStr     = formatTimestamp(ts);
-
-                        Object partsObj = data.get("participants");
-                        String otherUid = "";
-                        if (partsObj instanceof java.util.List) {
-                            for (Object p : (java.util.List<?>) partsObj) {
-                                if (!p.toString().equals(myUid)) { otherUid = p.toString(); break; }
-                            }
+                List<DataSnapshot> chatList = new ArrayList<>();
+                for (DataSnapshot chatSnap : snapshot.getChildren()) {
+                    DataSnapshot participantsSnap = chatSnap.child("participants");
+                    for (DataSnapshot p : participantsSnap.getChildren()) {
+                        if (myUid.equals(p.getValue(String.class))) {
+                            chatList.add(chatSnap);
+                            break;
                         }
-
-                        Map<?, ?> names  = (Map<?, ?>) data.get("participantNames");
-                        Map<?, ?> photos = (Map<?, ?>) data.get("participantPhotos");
-                        String otherName  = names  != null ? str(names,  otherUid, "Unknown") : "Unknown";
-                        String otherPhoto = photos != null ? str(photos, otherUid, "")        : "";
-                        String otherLangs = str(data, "otherLangs_" + otherUid, "");
-
-                        View row = buildChatRow(inflater, chatId, otherName, otherPhoto,
-                                otherLangs, lastMsg, timeStr, otherUid, idx);
-                        listContainer.addView(row);
-                        idx++;
                     }
+                }
+
+                if (chatList.isEmpty()) {
+                    emptyState.setVisibility(View.VISIBLE);
+                    return;
+                }
+                emptyState.setVisibility(View.GONE);
+
+                chatList.sort((a, b) -> {
+                    Long ta = a.child("lastTimestamp").getValue(Long.class);
+                    Long tb = b.child("lastTimestamp").getValue(Long.class);
+                    if (ta == null) ta = 0L;
+                    if (tb == null) tb = 0L;
+                    return Long.compare(tb, ta);
                 });
+
+                LayoutInflater inflater = LayoutInflater.from(requireContext());
+                int idx = 0;
+                for (DataSnapshot chatSnap : chatList) {
+                    String chatId  = chatSnap.getKey();
+                    String lastMsg = chatSnap.child("lastMessage").getValue(String.class);
+                    if (lastMsg == null) lastMsg = "No messages yet";
+                    Long tsLong = chatSnap.child("lastTimestamp").getValue(Long.class);
+                    String timeStr = formatTimestamp(tsLong);
+
+                    String otherUid = "";
+                    for (DataSnapshot p : chatSnap.child("participants").getChildren()) {
+                        String uid = p.getValue(String.class);
+                        if (uid != null && !uid.equals(myUid)) { otherUid = uid; break; }
+                    }
+
+                    String otherName  = chatSnap.child("participantNames").child(otherUid).getValue(String.class);
+                    String otherPhoto = chatSnap.child("participantPhotos").child(otherUid).getValue(String.class);
+                    String otherLangs = chatSnap.child("otherLangs_" + otherUid).getValue(String.class);
+                    if (otherName  == null) otherName  = "Unknown";
+                    if (otherPhoto == null) otherPhoto = "";
+                    if (otherLangs == null) otherLangs = "";
+
+                    View row = buildChatRow(inflater, chatId, otherName, otherPhoto,
+                            otherLangs, lastMsg, timeStr, otherUid, idx);
+                    listContainer.addView(row);
+                    idx++;
+                }
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {}
+        };
+
+        FirebaseDatabase.getInstance()
+                .getReference("chats")
+                .addValueEventListener(chatsListener);
     }
 
     private View buildChatRow(LayoutInflater inflater, String chatId, String otherName,
@@ -151,27 +175,23 @@ public class ChatsFragment extends Fragment {
         return row;
     }
 
-    private String formatTimestamp(Object ts) {
-        if (ts instanceof com.google.firebase.Timestamp) {
-            Date d = ((com.google.firebase.Timestamp) ts).toDate();
-            long diff = System.currentTimeMillis() - d.getTime();
-            if (diff < 60_000)        return "now";
-            if (diff < 3_600_000)    return (diff / 60_000) + "m";
-            if (diff < 86_400_000)   return (diff / 3_600_000) + "h";
-            return new SimpleDateFormat("MMM d", Locale.getDefault()).format(d);
-        }
-        return "";
-    }
-
-    private String str(Map<?, ?> map, String key, String fallback) {
-        Object v = map.get(key);
-        return v != null ? v.toString() : fallback;
+    private String formatTimestamp(Long tsMillis) {
+        if (tsMillis == null || tsMillis == 0) return "";
+        Date d = new Date(tsMillis);
+        long diff = System.currentTimeMillis() - tsMillis;
+        if (diff < 60_000)      return "now";
+        if (diff < 3_600_000)  return (diff / 60_000) + "m";
+        if (diff < 86_400_000) return (diff / 3_600_000) + "h";
+        return new SimpleDateFormat("MMM d", Locale.getDefault()).format(d);
     }
 
     @Override
     public void onDestroyView() {
         super.onDestroyView();
-        if (chatsListener != null) chatsListener.remove();
+        if (chatsListener != null) {
+            FirebaseDatabase.getInstance().getReference("chats")
+                    .removeEventListener(chatsListener);
+        }
         listContainer = null;
         emptyState    = null;
     }

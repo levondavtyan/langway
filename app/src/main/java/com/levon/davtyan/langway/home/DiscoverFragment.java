@@ -20,11 +20,13 @@ import androidx.fragment.app.Fragment;
 
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
-import com.google.firebase.Timestamp;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuth.AuthStateListener;
-import com.google.firebase.firestore.FirebaseFirestore;
-import com.google.firebase.firestore.QueryDocumentSnapshot;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ServerValue;
+import com.google.firebase.database.ValueEventListener;
 import com.levon.davtyan.langway.ChatActivity;
 import com.levon.davtyan.langway.R;
 
@@ -98,33 +100,36 @@ public class DiscoverFragment extends Fragment {
             myUid = firebaseAuth.getCurrentUser().getUid();
             Log.d("LangwayDiscover", "AuthState ready, myUid=" + myUid);
 
-            FirebaseFirestore.getInstance().collection("users").document(myUid).get()
-                    .addOnSuccessListener(doc -> {
+            FirebaseDatabase.getInstance()
+                    .getReference("users")
+                    .child(myUid)
+                    .get()
+                    .addOnSuccessListener(snapshot -> {
                         if (!isAdded()) return;
-                        if (doc != null && doc.exists()) {
-                            myName  = str(doc.getData(), "displayName", "");
-                            myPhoto = str(doc.getData(), "photo", "");
+                        if (snapshot.exists()) {
+                            myName  = strSnap(snapshot, "displayName", "");
+                            myPhoto = strSnap(snapshot, "photo", "");
 
-                            Object langsObj = doc.get("languages");
-                            if (langsObj instanceof Map) {
-                                List<String> entries = new ArrayList<>();
-                                for (Map.Entry<?, ?> e : ((Map<?, ?>) langsObj).entrySet()) {
-                                    myLangKeys.add(e.getKey().toString());
-                                    myLangPairs.add(e.getKey() + "|" + e.getValue());
-                                    entries.add(FLAG_MAP.getOrDefault(e.getKey().toString(), "🌐")
-                                            + " " + e.getKey() + " · " + e.getValue());
-                                }
-                                myLangStr = android.text.TextUtils.join("  ", entries);
+                            DataSnapshot langsSnap = snapshot.child("languages");
+                            List<String> entries = new ArrayList<>();
+                            for (DataSnapshot entry : langsSnap.getChildren()) {
+                                String lang  = entry.getKey();
+                                String level = entry.getValue(String.class);
+                                if (lang == null) continue;
+                                myLangKeys.add(lang);
+                                myLangPairs.add(lang + "|" + level);
+                                entries.add(FLAG_MAP.getOrDefault(lang, "🌐") + " " + lang + " · " + level);
                             }
+                            myLangStr = android.text.TextUtils.join("  ", entries);
 
-                            List<?> hobbiesList = (List<?>) doc.get("hobbies");
-                            if (hobbiesList != null) {
-                                for (Object h : hobbiesList) {
-                                    myHobbies.add(h.toString());
-                                    String key = h.toString();
-                                    if (key.contains(" ")) key = key.substring(key.indexOf(" ") + 1);
-                                    myHobbyKeys.add(key.toLowerCase());
-                                }
+                            for (DataSnapshot h : snapshot.child("hobbies").getChildren()) {
+                                String hobbyVal = h.getValue(String.class);
+                                if (hobbyVal == null) continue;
+                                myHobbies.add(hobbyVal);
+                                String key = hobbyVal.contains(" ")
+                                        ? hobbyVal.substring(hobbyVal.indexOf(" ") + 1)
+                                        : hobbyVal;
+                                myHobbyKeys.add(key.toLowerCase());
                             }
                         }
                         loadMatchingUsers();
@@ -135,21 +140,38 @@ public class DiscoverFragment extends Fragment {
     }
 
     private void loadMatchingUsers() {
-        Log.d("LangwayDiscover", "loadMatchingUsers start, myLangKeys=" + myLangKeys + " myHobbyKeys=" + myHobbyKeys);
-        FirebaseFirestore.getInstance().collection("users").get()
+        Log.d("LangwayDiscover", "loadMatchingUsers start");
+        FirebaseDatabase.getInstance()
+                .getReference("users")
+                .get()
                 .addOnSuccessListener(snapshot -> {
                     if (!isAdded()) return;
                     allMatches.clear();
 
-                    for (QueryDocumentSnapshot doc : snapshot) {
-                        if (doc.getId().equals(myUid)) continue;
+                    for (DataSnapshot userSnap : snapshot.getChildren()) {
+                        String uid = userSnap.getKey();
+                        if (myUid.equals(uid)) continue;
 
-                        Map<String, Object> data = new HashMap<>(doc.getData());
-                        data.put("_uid", doc.getId());
+                        Map<String, Object> data = new HashMap<>();
+                        data.put("_uid", uid);
+                        data.put("displayName", strSnap(userSnap, "displayName", ""));
+                        data.put("photo",       strSnap(userSnap, "photo", ""));
+                        data.put("bio",         strSnap(userSnap, "bio", ""));
 
-                        boolean matched = hasMatch(data);
-                        Log.d("LangwayDiscover", "User " + doc.getId() + " name=" + str(data,"displayName","?") + " langs=" + data.get("languages") + " hobbies=" + data.get("hobbies") + " → match=" + matched);
-                        if (matched) allMatches.add(data);
+                        Map<String, String> langsMap = new HashMap<>();
+                        for (DataSnapshot e : userSnap.child("languages").getChildren()) {
+                            if (e.getKey() != null) langsMap.put(e.getKey(), e.getValue(String.class));
+                        }
+                        data.put("languages", langsMap);
+
+                        List<String> hobbiesList = new ArrayList<>();
+                        for (DataSnapshot h : userSnap.child("hobbies").getChildren()) {
+                            String val = h.getValue(String.class);
+                            if (val != null) hobbiesList.add(val);
+                        }
+                        data.put("hobbies", hobbiesList);
+
+                        if (hasMatch(data)) allMatches.add(data);
                     }
 
                     Log.d("LangwayDiscover", "Total matches: " + allMatches.size());
@@ -162,17 +184,15 @@ public class DiscoverFragment extends Fragment {
     }
 
     private boolean hasMatch(Map<String, Object> user) {
-        // Language overlap
         Object langsObj = user.get("languages");
         if (langsObj instanceof Map) {
             for (Object key : ((Map<?, ?>) langsObj).keySet()) {
                 if (myLangKeys.contains(key.toString())) return true;
             }
         }
-
-        List<?> hobbies = (List<?>) user.get("hobbies");
-        if (hobbies != null) {
-            for (Object h : hobbies) {
+        Object hobbiesObj = user.get("hobbies");
+        if (hobbiesObj instanceof List) {
+            for (Object h : (List<?>) hobbiesObj) {
                 String key = h.toString();
                 if (key.contains(" ")) key = key.substring(key.indexOf(" ") + 1);
                 if (myHobbyKeys.contains(key.toLowerCase())) return true;
@@ -185,7 +205,6 @@ public class DiscoverFragment extends Fragment {
         if (!isAdded()) return;
         filterChips.removeAllViews();
         addFilterChip("All", true);
-
         for (String pair : myLangPairs) {
             String lang = pair.split("\\|")[0];
             addFilterChip(FLAG_MAP.getOrDefault(lang, "🌐") + " " + lang, false);
@@ -232,9 +251,9 @@ public class DiscoverFragment extends Fragment {
     }
 
     private boolean matchesChip(Map<String, Object> user, String filter) {
-        List<?> hobbies = (List<?>) user.get("hobbies");
-        if (hobbies != null) {
-            for (Object h : hobbies) {
+        Object hobbiesObj = user.get("hobbies");
+        if (hobbiesObj instanceof List) {
+            for (Object h : (List<?>) hobbiesObj) {
                 String label = h.toString();
                 if (label.contains(" ")) label = label.substring(label.indexOf(" ") + 1);
                 if (label.equalsIgnoreCase(filter)) return true;
@@ -314,7 +333,8 @@ public class DiscoverFragment extends Fragment {
         ((TextView) card.findViewById(R.id.person_languages)).setText(langLine);
         ((TextView) card.findViewById(R.id.person_name)).setText(name);
 
-        List<?> hobbies = (List<?>) user.get("hobbies");
+        Object hobbiesObj = user.get("hobbies");
+        List<?> hobbies = hobbiesObj instanceof List ? (List<?>) hobbiesObj : null;
         String bio = storedBio.isEmpty() ? buildBio(hobbies) : storedBio;
         ((TextView) card.findViewById(R.id.person_bio)).setText(bio);
 
@@ -353,11 +373,12 @@ public class DiscoverFragment extends Fragment {
         Arrays.sort(uids);
         String chatId = uids[0] + "_" + uids[1];
 
-        FirebaseFirestore db = FirebaseFirestore.getInstance();
-
-        db.collection("chats").document(chatId).get()
-                .addOnSuccessListener(doc -> {
-                    if (!doc.exists()) {
+        FirebaseDatabase.getInstance()
+                .getReference("chats")
+                .child(chatId)
+                .get()
+                .addOnSuccessListener(snapshot -> {
+                    if (!snapshot.exists()) {
                         Map<String, Object> names  = new HashMap<>();
                         Map<String, Object> photos = new HashMap<>();
                         names.put(myUid,    myName);
@@ -365,14 +386,20 @@ public class DiscoverFragment extends Fragment {
                         if (!myPhoto.isEmpty())    photos.put(myUid,    myPhoto);
                         if (!otherPhoto.isEmpty()) photos.put(otherUid, otherPhoto);
 
+                        List<String> participants = Arrays.asList(myUid, otherUid);
+
                         Map<String, Object> chatData = new HashMap<>();
-                        chatData.put("participants",                   Arrays.asList(myUid, otherUid));
-                        chatData.put("participantNames",               names);
-                        chatData.put("participantPhotos",              photos);
-                        chatData.put("otherLangs_" + myUid,           otherLangs);
-                        chatData.put("lastMessage",                    "");
-                        chatData.put("lastTimestamp",                  Timestamp.now());
-                        db.collection("chats").document(chatId).set(chatData);
+                        chatData.put("participants",              participants);
+                        chatData.put("participantNames",          names);
+                        chatData.put("participantPhotos",         photos);
+                        chatData.put("otherLangs_" + myUid,      otherLangs);
+                        chatData.put("lastMessage",               "");
+                        chatData.put("lastTimestamp",             ServerValue.TIMESTAMP);
+
+                        FirebaseDatabase.getInstance()
+                                .getReference("chats")
+                                .child(chatId)
+                                .setValue(chatData);
                     }
 
                     if (!isAdded()) return;
@@ -417,6 +444,11 @@ public class DiscoverFragment extends Fragment {
         if (map == null) return fallback;
         Object v = map.get(key);
         return v != null ? v.toString() : fallback;
+    }
+
+    private String strSnap(DataSnapshot snap, String key, String fallback) {
+        String v = snap.child(key).getValue(String.class);
+        return v != null ? v : fallback;
     }
 
     @Override

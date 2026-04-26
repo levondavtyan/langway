@@ -17,14 +17,14 @@ import com.google.android.material.button.MaterialButton;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
 import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.FirebaseDatabase;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.util.Base64;
 import android.widget.ImageView;
 import com.levon.davtyan.langway.MainActivity;
 import androidx.cardview.widget.CardView;
-import com.google.android.material.chip.ChipGroup;
 import com.levon.davtyan.langway.R;
 
 import org.json.JSONArray;
@@ -69,13 +69,13 @@ public class ProfileFragment extends Fragment {
     public void onViewCreated(@NonNull View v, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(v, savedInstanceState);
 
-        TextView     nameView    = v.findViewById(R.id.profile_name);
-        TextView     emailView   = v.findViewById(R.id.profile_email);
-        TextView     bioView     = v.findViewById(R.id.profile_bio);
-        ImageView    photoView   = v.findViewById(R.id.profile_photo);
-        LinearLayout pathCards   = v.findViewById(R.id.profile_path_cards);
-        CardView     hobbiesCard = v.findViewById(R.id.profile_hobbies_card);
-        ChipGroup    hobbyChips  = v.findViewById(R.id.profile_hobby_chips);
+        TextView      nameView    = v.findViewById(R.id.profile_name);
+        TextView      emailView   = v.findViewById(R.id.profile_email);
+        TextView      bioView     = v.findViewById(R.id.profile_bio);
+        ImageView     photoView   = v.findViewById(R.id.profile_photo);
+        LinearLayout  pathCards   = v.findViewById(R.id.profile_path_cards);
+        CardView      hobbiesCard = v.findViewById(R.id.profile_hobbies_card);
+        ChipGroup     hobbyChips  = v.findViewById(R.id.profile_hobby_chips);
         MaterialButton signOutBtn = v.findViewById(R.id.profile_sign_out_btn);
 
         Bundle args = getArguments();
@@ -89,8 +89,8 @@ public class ProfileFragment extends Fragment {
                 nameView.setText(name);
                 firstName = name.contains(" ") ? name.split(" ")[0] : name;
             }
-            ArrayList<String> langs    = args.getStringArrayList("languages");
-            ArrayList<String> hobbies  = args.getStringArrayList("hobbies");
+            ArrayList<String> langs   = args.getStringArrayList("languages");
+            ArrayList<String> hobbies = args.getStringArrayList("hobbies");
             if (langs   != null) langPairsArg.addAll(langs);
             if (hobbies != null) {
                 hobbiesArg.addAll(hobbies);
@@ -98,7 +98,7 @@ public class ProfileFragment extends Fragment {
             }
         }
 
-        final String fFirstName = firstName;
+        final String fFirstName  = firstName;
         final List<String> fLangPairs = langPairsArg;
         final List<String> fHobbies   = hobbiesArg;
 
@@ -106,25 +106,27 @@ public class ProfileFragment extends Fragment {
         if (fbUser != null) {
             if (fbUser.getEmail() != null) emailView.setText(fbUser.getEmail());
 
-            FirebaseFirestore.getInstance()
-                    .collection("users").document(fbUser.getUid()).get()
-                    .addOnSuccessListener(doc -> {
-                        if (!isAdded() || doc == null || !doc.exists()) {
+            FirebaseDatabase.getInstance()
+                    .getReference("users")
+                    .child(fbUser.getUid())
+                    .get()
+                    .addOnSuccessListener(snapshot -> {
+                        if (!isAdded() || !snapshot.exists()) {
                             buildPathCards(pathCards, fLangPairs, fHobbies, fFirstName);
                             return;
                         }
 
-                        String displayName = doc.getString("displayName");
+                        String displayName = snapshot.child("displayName").getValue(String.class);
                         if (displayName != null && !displayName.isEmpty())
                             nameView.setText(displayName);
 
-                        String bio = doc.getString("bio");
+                        String bio = snapshot.child("bio").getValue(String.class);
                         if (bio != null && !bio.isEmpty()) {
                             bioView.setText(bio);
                             bioView.setVisibility(View.VISIBLE);
                         }
 
-                        String photoB64 = doc.getString("photo");
+                        String photoB64 = snapshot.child("photo").getValue(String.class);
                         if (photoB64 != null && !photoB64.isEmpty()) {
                             try {
                                 byte[] bytes = Base64.decode(photoB64, Base64.DEFAULT);
@@ -135,19 +137,18 @@ public class ProfileFragment extends Fragment {
                         }
 
                         List<String> langPairs = new ArrayList<>();
-                        Object langsObj = doc.get("languages");
-                        if (langsObj instanceof Map) {
-                            for (Map.Entry<?, ?> entry : ((Map<?, ?>) langsObj).entrySet()) {
-                                langPairs.add(entry.getKey() + "|" + entry.getValue());
-                            }
+                        for (DataSnapshot entry : snapshot.child("languages").getChildren()) {
+                            String lang  = entry.getKey();
+                            String level = entry.getValue(String.class);
+                            if (lang != null) langPairs.add(lang + "|" + level);
                         }
 
                         List<String> hobbies = new ArrayList<>();
-                        List<?> hobbiesList = (List<?>) doc.get("hobbies");
-                        if (hobbiesList != null) {
-                            for (Object h : hobbiesList) hobbies.add(h.toString());
-                            showHobbyChips(hobbyChips, hobbiesCard, hobbies);
+                        for (DataSnapshot h : snapshot.child("hobbies").getChildren()) {
+                            String val = h.getValue(String.class);
+                            if (val != null) hobbies.add(val);
                         }
+                        if (!hobbies.isEmpty()) showHobbyChips(hobbyChips, hobbiesCard, hobbies);
 
                         String fn = displayName != null && displayName.contains(" ")
                                 ? displayName.split(" ")[0]
@@ -196,7 +197,7 @@ public class ProfileFragment extends Fragment {
             ((TextView) card.findViewById(R.id.path_card_proficiency)).setText(level);
             card.findViewById(R.id.path_card_trend_badge).setVisibility(View.GONE);
 
-            ChipGroup chipGroup = card.findViewById(R.id.path_card_types);
+            ChipGroup chipGroup  = card.findViewById(R.id.path_card_types);
             TextView  reasonView = card.findViewById(R.id.path_card_reason);
             reasonView.setText("Loading your path…");
 

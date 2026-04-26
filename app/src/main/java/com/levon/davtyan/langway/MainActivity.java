@@ -25,7 +25,7 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthUserCollisionException;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.UserProfileChangeRequest;
-import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.database.FirebaseDatabase;
 import com.levon.davtyan.langway.ui.login.LoginFragment;
 
 import java.util.ArrayList;
@@ -152,9 +152,9 @@ public class MainActivity extends AppCompatActivity {
         HobbiesFragment      hobbiesFrag = (HobbiesFragment)      fragments[2];
         ProfileSetupFragment setupFrag   = (ProfileSetupFragment) fragments[3];
 
-        final String name    = loginFrag.getFullName();
-        final String email   = loginFrag.getEmail();
-        final String bio     = setupFrag.getBio();
+        final String name     = loginFrag.getFullName();
+        final String email    = loginFrag.getEmail();
+        final String bio      = setupFrag.getBio();
         final String photoB64 = setupFrag.getPhotoBase64();
         final LinkedHashMap<String, String> langs = langFrag.getSelectedLanguages();
         final ArrayList<String> hobbies = new ArrayList<>(hobbiesFrag.getSelectedHobbies());
@@ -176,40 +176,39 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        Map<String, Object> doc = new HashMap<>();
-        doc.put("uid",         uid);
-        doc.put("displayName", name);
-        doc.put("email",       email);
-        doc.put("languages",   langs);
-        doc.put("hobbies",     hobbies);
-        doc.put("createdAt",   com.google.firebase.Timestamp.now());
-        if (bio != null && !bio.isEmpty())    doc.put("bio",   bio);
-        if (photoB64 != null)                  doc.put("photo", photoB64);
+        Map<String, Object> userNode = new HashMap<>();
+        userNode.put("uid",         uid);
+        userNode.put("displayName", name);
+        userNode.put("email",       email);
+        userNode.put("hobbies",     hobbies);
+        userNode.put("createdAt",   System.currentTimeMillis());
+        if (bio != null && !bio.isEmpty())    userNode.put("bio",   bio);
+        if (photoB64 != null)                  userNode.put("photo", photoB64);
 
-        // Force a fresh ID token before writing — ensures Firestore sees the user
-        // as authenticated even if the token hasn't propagated yet from registerAtStepOne
-        FirebaseAuth.getInstance().getCurrentUser()
-                .getIdToken(true)
-                .addOnCompleteListener(this, tokenTask -> {
-                    Log.d(TAG, "Token refresh: " + tokenTask.isSuccessful()
-                            + " uid=" + uid + " langs=" + langs + " hobbies=" + hobbies);
-                    FirebaseFirestore.getInstance()
-                            .collection("users").document(uid).set(doc)
-                            .addOnSuccessListener(v -> {
-                                Log.d(TAG, "Firestore write OK");
-                                Intent intent = new Intent(this, PathActivity.class);
-                                intent.putExtra(PathActivity.EXTRA_NAME, name);
-                                intent.putStringArrayListExtra(PathActivity.EXTRA_LANGUAGES, langPairs);
-                                intent.putStringArrayListExtra(PathActivity.EXTRA_HOBBIES, hobbies);
-                                startActivity(intent);
-                                overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
-                            })
-                            .addOnFailureListener(ex -> {
-                                Log.e(TAG, "Firestore write failed: " + ex.getMessage());
-                                nextBtn.setEnabled(true);
-                                nextBtn.setText(getString(R.string.finish_button_text));
-                                Toast.makeText(this, "Failed to save profile: " + ex.getMessage(), Toast.LENGTH_LONG).show();
-                            });
+        Map<String, Object> langsNode = new HashMap<>();
+        for (Map.Entry<String, String> entry : langs.entrySet()) {
+            langsNode.put(entry.getKey(), entry.getValue());
+        }
+        userNode.put("languages", langsNode);
+
+        FirebaseDatabase.getInstance()
+                .getReference("users")
+                .child(uid)
+                .setValue(userNode)
+                .addOnSuccessListener(unused -> {
+                    Log.d(TAG, "Realtime DB write OK");
+                    Intent intent = new Intent(this, PathActivity.class);
+                    intent.putExtra(PathActivity.EXTRA_NAME, name);
+                    intent.putStringArrayListExtra(PathActivity.EXTRA_LANGUAGES, langPairs);
+                    intent.putStringArrayListExtra(PathActivity.EXTRA_HOBBIES, hobbies);
+                    startActivity(intent);
+                    overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
+                })
+                .addOnFailureListener(ex -> {
+                    Log.e(TAG, "Realtime DB write failed: " + ex.getMessage());
+                    nextBtn.setEnabled(true);
+                    nextBtn.setText(getString(R.string.finish_button_text));
+                    Toast.makeText(this, "Failed to save profile: " + ex.getMessage(), Toast.LENGTH_LONG).show();
                 });
     }
 
@@ -228,7 +227,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void goToHome(String name, ArrayList<String> languages, ArrayList<String> hobbies) {
         Intent intent = new Intent(this, HomeActivity.class);
-        if (name    != null) intent.putExtra(HomeActivity.EXTRA_NAME, name);
+        if (name      != null) intent.putExtra(HomeActivity.EXTRA_NAME, name);
         if (languages != null) intent.putStringArrayListExtra(HomeActivity.EXTRA_LANGUAGES, languages);
         if (hobbies   != null) intent.putStringArrayListExtra(HomeActivity.EXTRA_HOBBIES,   hobbies);
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
