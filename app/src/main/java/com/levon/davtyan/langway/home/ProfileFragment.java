@@ -16,7 +16,16 @@ import androidx.fragment.app.Fragment;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
+import com.google.firebase.auth.EmailAuthProvider;
+import com.google.firebase.auth.FirebaseAuthRecentLoginRequiredException;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import androidx.annotation.NonNull;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.FirebaseDatabase;
 import android.graphics.Bitmap;
@@ -168,6 +177,10 @@ public class ProfileFragment extends Fragment {
             startActivity(intent);
             requireActivity().overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
         });
+
+        com.google.android.material.button.MaterialButton deleteBtn =
+                v.findViewById(R.id.profile_delete_account_btn);
+        deleteBtn.setOnClickListener(btn -> showDeleteConfirmDialog());
     }
 
     private void buildPathCards(LinearLayout container, List<String> langPairs,
@@ -332,4 +345,129 @@ public class ProfileFragment extends Fragment {
         chip.setTextSize(11f);
         return chip;
     }
+
+    private void showDeleteConfirmDialog() {
+        new MaterialAlertDialogBuilder(requireContext())
+                .setTitle("Delete Account")
+                .setMessage("This will permanently delete your account, profile, and all your chats. This cannot be undone.")
+                .setPositiveButton("Delete", (dialog, which) -> deleteAccount())
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    /**
+     * Full account wipe:
+     * 1. Re-authenticate (Firebase requires recent login before account deletion)
+     * 2. Remove all chats the user is a participant in
+     * 3. Remove users/{uid} node
+     * 4. Delete the Firebase Auth account
+     * 5. Navigate to MainActivity
+     */
+    private void deleteAccount() {
+        com.google.firebase.auth.FirebaseUser fbUser = FirebaseAuth.getInstance().getCurrentUser();
+        if (fbUser == null) return;
+
+        // Ask for password to re-authenticate before deletion
+        android.widget.EditText passwordInput = new android.widget.EditText(requireContext());
+        passwordInput.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        passwordInput.setHint("Enter your password");
+        int pad = (int)(16 * getResources().getDisplayMetrics().density);
+        passwordInput.setPadding(pad, pad, pad, pad);
+
+        new MaterialAlertDialogBuilder(requireContext())
+                .setTitle("Confirm Password")
+                .setMessage("Please enter your password to confirm account deletion.")
+                .setView(passwordInput)
+                .setPositiveButton("Delete", (dialog, which) -> {
+                    String password = passwordInput.getText().toString();
+                    if (password.isEmpty()) {
+                        android.widget.Toast.makeText(requireContext(), "Password cannot be empty.", android.widget.Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    reAuthAndDelete(fbUser, password);
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void reAuthAndDelete(com.google.firebase.auth.FirebaseUser fbUser, String password) {
+        com.google.android.material.button.MaterialButton deleteBtn =
+                requireView().findViewById(R.id.profile_delete_account_btn);
+        deleteBtn.setEnabled(false);
+        deleteBtn.setText("Deleting…");
+
+        String email = fbUser.getEmail() != null ? fbUser.getEmail() : "";
+        com.google.firebase.auth.AuthCredential credential =
+                EmailAuthProvider.getCredential(email, password);
+
+        fbUser.reauthenticate(credential).addOnCompleteListener(reAuthTask -> {
+            if (!isAdded()) return;
+            if (!reAuthTask.isSuccessful()) {
+                deleteBtn.setEnabled(true);
+                deleteBtn.setText("Delete Account");
+                android.widget.Toast.makeText(requireContext(),
+                        "Wrong password. Please try again.", android.widget.Toast.LENGTH_LONG).show();
+                return;
+            }
+            // Re-auth succeeded — now wipe all data then delete Auth account
+            wipeDataThenDelete(fbUser);
+        });
+    }
+
+    private void wipeDataThenDelete(com.google.firebase.auth.FirebaseUser fbUser) {
+        String uid = fbUser.getUid();
+        DatabaseReference chatsRef = FirebaseDatabase.getInstance().getReference("chats");
+
+        chatsRef.addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot chatsSnapshot) {
+                for (DataSnapshot chat : chatsSnapshot.getChildren()) {
+                    for (DataSnapshot p : chat.child("participants").getChildren()) {
+                        if (uid.equals(p.getValue(String.class))) {
+                            chatsRef.child(chat.getKey()).removeValue();
+                            break;
+                        }
+                    }
+                }
+
+                FirebaseDatabase.getInstance()
+                        .getReference("users")
+                        .child(uid)
+                        .removeValue()
+                        .addOnCompleteListener(task -> {
+                            fbUser.delete().addOnCompleteListener(authTask -> {
+                                if (!isAdded()) return;
+                                if (!authTask.isSuccessful()) {
+                                    com.google.android.material.button.MaterialButton btn =
+                                            requireView().findViewById(R.id.profile_delete_account_btn);
+                                    btn.setEnabled(true);
+                                    btn.setText("Delete Account");
+                                    android.widget.Toast.makeText(requireContext(),
+                                            "Failed to delete account: " + (authTask.getException() != null
+                                                    ? authTask.getException().getMessage() : "unknown error"),
+                                            android.widget.Toast.LENGTH_LONG).show();
+                                    return;
+                                }
+                                Intent intent = new Intent(requireActivity(), MainActivity.class);
+                                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                                startActivity(intent);
+                                requireActivity().overridePendingTransition(
+                                        android.R.anim.fade_in, android.R.anim.fade_out);
+                            });
+                        });
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {
+                if (!isAdded()) return;
+                com.google.android.material.button.MaterialButton btn =
+                        requireView().findViewById(R.id.profile_delete_account_btn);
+                btn.setEnabled(true);
+                btn.setText("Delete Account");
+                android.widget.Toast.makeText(requireContext(),
+                        "Failed to delete account. Please try again.", android.widget.Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
 }

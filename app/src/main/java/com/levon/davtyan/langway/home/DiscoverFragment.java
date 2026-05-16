@@ -23,6 +23,7 @@ import com.google.android.material.chip.ChipGroup;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuth.AuthStateListener;
 import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ServerValue;
@@ -141,51 +142,58 @@ public class DiscoverFragment extends Fragment {
         FirebaseAuth.getInstance().addAuthStateListener(authStateListener);
     }
 
-    // ── Step 1: load all users ────────────────────────────────────────────────
+    // ── Step 1: load all users (force fresh read — bypass local cache) ─────────
     private void loadMatchingUsers() {
-        FirebaseDatabase.getInstance()
-                .getReference("users")
-                .get()
-                .addOnSuccessListener(snapshot -> {
-                    if (!isAdded()) return;
-                    allMatches.clear();
+        DatabaseReference usersRef = FirebaseDatabase.getInstance().getReference("users");
+        usersRef.addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                if (!isAdded()) return;
+                allMatches.clear();
 
-                    for (DataSnapshot userSnap : snapshot.getChildren()) {
-                        String uid = userSnap.getKey();
-                        if (myUid.equals(uid)) continue;
+                for (DataSnapshot userSnap : snapshot.getChildren()) {
+                    String uid = userSnap.getKey();
+                    if (myUid.equals(uid)) continue;
 
-                        Map<String, Object> data = new HashMap<>();
-                        data.put("_uid",        uid);
-                        data.put("displayName", strSnap(userSnap, "displayName", ""));
-                        data.put("photo",       strSnap(userSnap, "photo", ""));
-                        data.put("bio",         strSnap(userSnap, "bio", ""));
+                    Map<String, Object> data = new HashMap<>();
+                    data.put("_uid",        uid);
+                    data.put("displayName", strSnap(userSnap, "displayName", ""));
+                    data.put("photo",       strSnap(userSnap, "photo", ""));
+                    data.put("bio",         strSnap(userSnap, "bio", ""));
 
-                        Long lastSeen = userSnap.child("lastSeen").getValue(Long.class);
-                        data.put("lastSeen", lastSeen); // may be null for old accounts
+                    Long lastSeen = userSnap.child("lastSeen").getValue(Long.class);
+                    data.put("lastSeen", lastSeen);
 
-                        Map<String, String> langsMap = new HashMap<>();
-                        for (DataSnapshot e : userSnap.child("languages").getChildren()) {
-                            if (e.getKey() != null)
-                                langsMap.put(e.getKey(), e.getValue(String.class));
-                        }
-                        data.put("languages", langsMap);
-
-                        List<String> hobbiesList = new ArrayList<>();
-                        for (DataSnapshot h : userSnap.child("hobbies").getChildren()) {
-                            String val = h.getValue(String.class);
-                            if (val != null) hobbiesList.add(val);
-                        }
-                        data.put("hobbies", hobbiesList);
-
-                        if (hasMatch(data)) allMatches.add(data);
+                    Map<String, String> langsMap = new HashMap<>();
+                    for (DataSnapshot e : userSnap.child("languages").getChildren()) {
+                        if (e.getKey() != null)
+                            langsMap.put(e.getKey(), e.getValue(String.class));
                     }
+                    data.put("languages", langsMap);
 
-                    // Step 2: fill in lastSeen from chat history for accounts that lack it
-                    enrichLastSeenFromChats();
-                })
-                .addOnFailureListener(e -> {
-                    if (isAdded()) showEmpty();
-                });
+                    List<String> hobbiesList = new ArrayList<>();
+                    for (DataSnapshot h : userSnap.child("hobbies").getChildren()) {
+                        String val = h.getValue(String.class);
+                        if (val != null) hobbiesList.add(val);
+                    }
+                    data.put("hobbies", hobbiesList);
+
+                    // Only include users whose email is present in DB
+                    // (deleted Auth accounts still have a DB node but email won't
+                    //  be re-written, so this acts as a liveness check)
+                    String userEmail = strSnap(userSnap, "email", "");
+                    if (!userEmail.isEmpty() && hasMatch(data)) allMatches.add(data);
+                }
+
+                // Step 2: fill in lastSeen from chat history for accounts that lack it
+                enrichLastSeenFromChats();
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {
+                if (isAdded()) showEmpty();
+            }
+        });
     }
 
     // ── Step 2: for every user without lastSeen, scan chats for their most
@@ -210,52 +218,55 @@ public class DiscoverFragment extends Fragment {
         // Load the full chats node once, then scan per-user
         FirebaseDatabase.getInstance()
                 .getReference("chats")
-                .get()
-                .addOnSuccessListener(chatsSnapshot -> {
-                    if (!isAdded()) return;
+                .addListenerForSingleValueEvent(new ValueEventListener() {
+                    @Override
+                    public void onDataChange(@NonNull DataSnapshot chatsSnapshot) {
+                        if (!isAdded()) return;
 
-                    // Build a map: uid → max(lastTimestamp across all their chats)
-                    Map<String, Long> bestTs = new HashMap<>();
+                        // Build a map: uid → max(lastTimestamp across all their chats)
+                        Map<String, Long> bestTs = new HashMap<>();
 
-                    for (DataSnapshot chat : chatsSnapshot.getChildren()) {
-                        Long ts = chat.child("lastTimestamp").getValue(Long.class);
-                        if (ts == null || ts == 0) continue;
+                        for (DataSnapshot chat : chatsSnapshot.getChildren()) {
+                            Long ts = chat.child("lastTimestamp").getValue(Long.class);
+                            if (ts == null || ts == 0) continue;
 
-                        // participants is stored as a List or as individual children
-                        for (DataSnapshot p : chat.child("participants").getChildren()) {
-                            String uid = p.getValue(String.class);
-                            if (uid == null) continue;
-                            Long current = bestTs.get(uid);
-                            if (current == null || ts > current) bestTs.put(uid, ts);
-                        }
-                    }
-
-                    // Patch allMatches entries that had no lastSeen
-                    for (Map<String, Object> user : allMatches) {
-                        Object ls = user.get("lastSeen");
-                        if (!(ls instanceof Long) || (Long) ls == 0) {
-                            String uid = str(user, "_uid", "");
-                            Long derived = bestTs.get(uid);
-                            if (derived != null) {
-                                user.put("lastSeen", derived);
-                                // Also write it back to Firebase so next load is instant
-                                FirebaseDatabase.getInstance()
-                                        .getReference("users")
-                                        .child(uid)
-                                        .child("lastSeen")
-                                        .setValue(derived);
+                            for (DataSnapshot p : chat.child("participants").getChildren()) {
+                                String uid = p.getValue(String.class);
+                                if (uid == null) continue;
+                                Long current = bestTs.get(uid);
+                                if (current == null || ts > current) bestTs.put(uid, ts);
                             }
                         }
-                    }
 
-                    buildFilters();
-                    renderCards(allMatches);
-                })
-                .addOnFailureListener(e -> {
-                    // Chats read failed — just render without enrichment
-                    if (isAdded()) {
+                        // Patch allMatches entries that had no lastSeen
+                        for (Map<String, Object> user : allMatches) {
+                            Object ls = user.get("lastSeen");
+                            if (!(ls instanceof Long) || (Long) ls == 0) {
+                                String uid = str(user, "_uid", "");
+                                Long derived = bestTs.get(uid);
+                                if (derived != null) {
+                                    user.put("lastSeen", derived);
+                                    // Write back so next load is instant
+                                    FirebaseDatabase.getInstance()
+                                            .getReference("users")
+                                            .child(uid)
+                                            .child("lastSeen")
+                                            .setValue(derived);
+                                }
+                            }
+                        }
+
                         buildFilters();
                         renderCards(allMatches);
+                    }
+
+                    @Override
+                    public void onCancelled(@NonNull DatabaseError error) {
+                        // Chats read failed — render without enrichment
+                        if (isAdded()) {
+                            buildFilters();
+                            renderCards(allMatches);
+                        }
                     }
                 });
     }
@@ -396,11 +407,6 @@ public class DiscoverFragment extends Fragment {
             } catch (Exception ignored) {}
         }
 
-        // ── Online status ─────────────────────────────────────────────────────
-        Object lastSeenObj = user.get("lastSeen");
-        Long lastSeenMillis = lastSeenObj instanceof Long ? (Long) lastSeenObj : null;
-        String onlineStatus = formatOnlineStatus(lastSeenMillis);
-        ((TextView) card.findViewById(R.id.person_online_status)).setText(onlineStatus);
         card.findViewById(R.id.person_online_dot).setVisibility(View.GONE);
 
         // ── Languages (all) ───────────────────────────────────────────────────
@@ -447,23 +453,6 @@ public class DiscoverFragment extends Fragment {
                 .setInterpolator(new DecelerateInterpolator()).start();
 
         cardsContainer.addView(card);
-    }
-
-    /**
-     * Human-readable last-seen string.
-     * Works for both new accounts (lastSeen written on app open) and old accounts
-     * (lastSeen derived from their most recent chat message).
-     */
-    private String formatOnlineStatus(Long lastSeenMillis) {
-        if (lastSeenMillis == null || lastSeenMillis == 0) return "offline";
-        long diff = System.currentTimeMillis() - lastSeenMillis;
-        if (diff < 60_000)      return "online now";
-        if (diff < 3_600_000)   return (diff / 60_000) + "m ago";
-        if (diff < 86_400_000)  return (diff / 3_600_000) + "h ago";
-        long days = diff / 86_400_000;
-        if (days == 1)          return "yesterday";
-        if (days < 7)           return days + "d ago";
-        return "a while ago";
     }
 
     private void startOrOpenChat(String otherUid, String otherName,
@@ -535,8 +524,12 @@ public class DiscoverFragment extends Fragment {
         chip.setChipStrokeColor(android.content.res.ColorStateList.valueOf(CHIP_STROKE));
         chip.setChipStrokeWidth(1f);
         chip.setTextSize(10f);
-        chip.setChipMinHeight(24f);  // tighter height
-        chip.setEnsureMinTouchTargetSize(false); // removes extra internal padding
+        chip.setEnsureMinTouchTargetSize(false);
+        chip.setChipMinHeight(0f);
+        chip.setChipStartPadding(6f);
+        chip.setChipEndPadding(6f);
+        chip.setTextStartPadding(0f);
+        chip.setTextEndPadding(0f);
         return chip;
     }
 

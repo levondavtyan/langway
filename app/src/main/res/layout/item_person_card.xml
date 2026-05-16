@@ -43,22 +43,6 @@
                 android:scaleType="centerCrop"
                 android:visibility="gone" />
 
-            <!-- Online status pill at the bottom -->
-            <TextView
-                android:id="@+id/person_online_status"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="bottom|center_horizontal"
-                android:layout_marginBottom="6dp"
-                android:paddingStart="5dp"
-                android:paddingEnd="5dp"
-                android:paddingTop="2dp"
-                android:paddingBottom="2dp"
-                android:background="@drawable/bg_flag_badge"
-                android:gravity="center"
-                android:maxLines="1"
-                android:textSize="8sp"
-                android:textColor="@color/white" />
 
         </FrameLayout>
 
@@ -134,7 +118,7 @@
                 android:minHeight="0dp"
                 android:paddingStart="16dp"
                 android:paddingEnd="16dp"
-                android:text="Start chatting"
+                android:text="Go to chat"
                 android:textSize="12sp"
                 android:insetTop="0dp"
                 android:insetBottom="0dp" />

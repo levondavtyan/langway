@@ -161,5 +161,18 @@
             android:layout_marginTop="24dp"
             android:text="Sign Out" />
 
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/profile_delete_account_btn"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:layout_marginStart="16dp"
+            android:layout_marginEnd="16dp"
+            android:layout_marginTop="10dp"
+            android:text="Delete Account"
+            android:textColor="#D32F2F"
+            app:strokeColor="#D32F2F"
+            app:strokeWidth="1dp" />
+
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>
