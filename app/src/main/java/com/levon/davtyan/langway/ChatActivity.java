@@ -30,20 +30,25 @@ import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ServerValue;
 
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
+
+import com.google.firebase.database.ValueEventListener;
 
 public class ChatActivity extends AppCompatActivity {
 
-    public static final String EXTRA_CHAT_ID    = "chat_id";
-    public static final String EXTRA_OTHER_UID  = "other_uid";
-    public static final String EXTRA_OTHER_NAME = "other_name";
+    public static final String EXTRA_CHAT_ID     = "chat_id";
+    public static final String EXTRA_OTHER_UID   = "other_uid";
+    public static final String EXTRA_OTHER_NAME  = "other_name";
     public static final String EXTRA_OTHER_LANGS = "other_langs";
     public static final String EXTRA_OTHER_PHOTO = "other_photo";
 
-    private static final int MY_BUBBLE_BG     = 0xFF00C896;
-    private static final int THEIR_BUBBLE_BG  = 0xFFF0FBF8;
-    private static final int MY_BUBBLE_TEXT   = 0xFFFFFFFF;
+    private static final int MY_BUBBLE_BG      = 0xFF00C896;
+    private static final int THEIR_BUBBLE_BG   = 0xFFF0FBF8;
+    private static final int MY_BUBBLE_TEXT    = 0xFFFFFFFF;
     private static final int THEIR_BUBBLE_TEXT = 0xFF0D2626;
 
     private String myUid;
@@ -67,7 +72,11 @@ public class ChatActivity extends AppCompatActivity {
         String otherPhoto = getIntent().getStringExtra(EXTRA_OTHER_PHOTO);
 
         ((TextView) findViewById(R.id.chat_other_name)).setText(otherName);
-        ((TextView) findViewById(R.id.chat_other_langs)).setText(otherLangs != null ? otherLangs : "");
+        // Show online status in the subtitle; falls back to langs if lastSeen unavailable
+        TextView statusView = findViewById(R.id.chat_other_langs);
+        String otherUidFinal = getIntent().getStringExtra(EXTRA_OTHER_UID);
+        statusView.setText(otherLangs != null ? otherLangs : "");
+        fetchAndShowOnlineStatus(otherUidFinal, statusView);
 
         TextView initialsView = findViewById(R.id.chat_other_initials);
         ImageView photoView   = findViewById(R.id.chat_other_photo);
@@ -93,18 +102,31 @@ public class ChatActivity extends AppCompatActivity {
         scrollView        = findViewById(R.id.chat_scroll);
         inputField        = findViewById(R.id.chat_input);
 
-        LinearLayout inputBar = findViewById(R.id.chat_input_bar);
-        ViewCompat.setOnApplyWindowInsetsListener(inputBar, (v, wi) -> {
-            Insets ins = wi.getInsets(WindowInsetsCompat.Type.systemBars());
-            v.setPadding(v.getPaddingLeft(), v.getPaddingTop(), v.getPaddingRight(), ins.bottom);
-            return wi;
-        });
+        // ── Keyboard push-up fix ──────────────────────────────────────────────
+        // Listen on the root view for both system bar AND IME (keyboard) insets.
+        // When the keyboard appears the IME inset grows; we apply it to the
+        // bottom of the input bar so it rises above the keyboard.
+        View root = findViewById(R.id.chat_root);
+        ViewCompat.setOnApplyWindowInsetsListener(root, (v, windowInsets) -> {
+            Insets sysBar = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
+            Insets ime    = windowInsets.getInsets(WindowInsetsCompat.Type.ime());
 
-        LinearLayout topBar = findViewById(R.id.chat_top_bar);
-        ViewCompat.setOnApplyWindowInsetsListener(topBar, (v, wi) -> {
-            Insets ins = wi.getInsets(WindowInsetsCompat.Type.systemBars());
-            v.setPadding(v.getPaddingLeft(), ins.top + 16, v.getPaddingRight(), v.getPaddingBottom());
-            return wi;
+            // Top bar padding: status bar height
+            View topBar = findViewById(R.id.chat_top_bar);
+            topBar.setPadding(topBar.getPaddingLeft(), sysBar.top + 16,
+                    topBar.getPaddingRight(), topBar.getPaddingBottom());
+
+            // Input bar padding: keyboard height (or nav bar if keyboard hidden)
+            View inputBar = findViewById(R.id.chat_input_bar);
+            int bottomInset = ime.bottom > 0 ? ime.bottom : sysBar.bottom;
+            inputBar.setPadding(
+                    inputBar.getPaddingLeft(),
+                    8,
+                    inputBar.getPaddingRight(),
+                    bottomInset > 0 ? bottomInset : 8
+            );
+
+            return WindowInsetsCompat.CONSUMED;
         });
 
         ((ImageButton) findViewById(R.id.chat_back_btn)).setOnClickListener(v -> finish());
@@ -146,8 +168,9 @@ public class ChatActivity extends AppCompatActivity {
             public void onChildAdded(DataSnapshot snapshot, String previousChildName) {
                 String sender = snapshot.child("senderUid").getValue(String.class);
                 String text   = snapshot.child("text").getValue(String.class);
+                Long   ts     = snapshot.child("timestamp").getValue(Long.class);
                 boolean isMe  = myUid.equals(sender);
-                addBubble(text != null ? text : "", isMe);
+                addBubble(text != null ? text : "", isMe, ts);
                 scrollView.post(() -> scrollView.fullScroll(View.FOCUS_DOWN));
             }
 
@@ -160,13 +183,15 @@ public class ChatActivity extends AppCompatActivity {
         messagesRef.orderByChild("timestamp").addChildEventListener(messageListener);
     }
 
-    private void addBubble(String text, boolean isMe) {
+    private void addBubble(String text, boolean isMe, Long timestampMillis) {
+        // Bubble
         TextView bubble = new TextView(this);
         bubble.setText(text);
         bubble.setTextSize(14f);
         bubble.setTextColor(isMe ? MY_BUBBLE_TEXT : THEIR_BUBBLE_TEXT);
         bubble.setPadding(dp(12), dp(8), dp(12), dp(8));
         bubble.setLineSpacing(0, 1.3f);
+        bubble.setMaxWidth(dp(260));
 
         GradientDrawable bg = new GradientDrawable();
         bg.setColor(isMe ? MY_BUBBLE_BG : THEIR_BUBBLE_BG);
@@ -175,14 +200,33 @@ public class ChatActivity extends AppCompatActivity {
                 : new float[]{18,18, 18,18, 18,18, 4,4});
         bubble.setBackground(bg);
 
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+        LinearLayout.LayoutParams bubbleParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT);
-        params.setMargins(dp(8), dp(3), dp(8), dp(3));
-        params.gravity = isMe ? Gravity.END : Gravity.START;
-        params.weight  = 0;
-        bubble.setMaxWidth(dp(260));
+        bubbleParams.setMargins(dp(8), dp(2), dp(8), dp(1));
 
+        // Timestamp
+        String timeLabel = (timestampMillis != null && timestampMillis > 0)
+                ? formatMessageTime(timestampMillis) : "";
+        TextView tsView = new TextView(this);
+        tsView.setText(timeLabel);
+        tsView.setTextSize(10f);
+        tsView.setTextColor(Color.parseColor("#88000000"));
+
+        LinearLayout.LayoutParams tsParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        tsParams.setMargins(dp(12), 0, dp(12), dp(2));
+        tsParams.gravity = isMe ? Gravity.END : Gravity.START;
+
+        // Column: bubble on top, timestamp below, aligned to same side
+        LinearLayout col = new LinearLayout(this);
+        col.setOrientation(LinearLayout.VERTICAL);
+        col.setGravity(isMe ? Gravity.END : Gravity.START);
+        col.addView(bubble, bubbleParams);
+        col.addView(tsView, tsParams);
+
+        // Row: stretches full width so col can be pushed to left or right
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
@@ -192,7 +236,9 @@ public class ChatActivity extends AppCompatActivity {
         row.setLayoutParams(rowParams);
         row.setGravity(isMe ? Gravity.END : Gravity.START);
 
-        row.addView(bubble, params);
+        row.addView(col, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT));
 
         row.setAlpha(0f);
         row.setTranslationY(8f);
@@ -200,6 +246,72 @@ public class ChatActivity extends AppCompatActivity {
                 .setDuration(200).setInterpolator(new DecelerateInterpolator()).start();
 
         messagesContainer.addView(row);
+    }
+
+
+    /**
+     * Fetches the other user's lastSeen from Firebase.
+     * Falls back to scanning chats for the most recent shared message timestamp
+     * so it works for old accounts that never wrote lastSeen directly.
+     */
+    private void fetchAndShowOnlineStatus(String otherUid, TextView target) {
+        if (otherUid == null || otherUid.isEmpty()) return;
+        FirebaseDatabase.getInstance()
+                .getReference("users")
+                .child(otherUid)
+                .child("lastSeen")
+                .get()
+                .addOnSuccessListener(snap -> {
+                    Long lastSeen = snap.getValue(Long.class);
+                    if (lastSeen != null && lastSeen > 0) {
+                        target.setText(formatOnlineStatus(lastSeen));
+                    } else {
+                        // No lastSeen — derive it from the shared chat's lastTimestamp
+                        if (chatId != null) {
+                            FirebaseDatabase.getInstance()
+                                    .getReference("chats")
+                                    .child(chatId)
+                                    .child("lastTimestamp")
+                                    .get()
+                                    .addOnSuccessListener(tsSnap -> {
+                                        Long ts = tsSnap.getValue(Long.class);
+                                        if (ts != null && ts > 0) {
+                                            target.setText(formatOnlineStatus(ts));
+                                            // Backfill so future loads are instant
+                                            FirebaseDatabase.getInstance()
+                                                    .getReference("users")
+                                                    .child(otherUid)
+                                                    .child("lastSeen")
+                                                    .setValue(ts);
+                                        }
+                                        // else: leave the langs text as-is
+                                    });
+                        }
+                    }
+                });
+    }
+
+    private String formatOnlineStatus(long lastSeenMillis) {
+        long diff = System.currentTimeMillis() - lastSeenMillis;
+        if (diff < 60_000)      return "online now";
+        if (diff < 3_600_000)   return (diff / 60_000) + "m ago";
+        if (diff < 86_400_000)  return (diff / 3_600_000) + "h ago";
+        long days = diff / 86_400_000;
+        if (days == 1)          return "yesterday";
+        if (days < 7)           return days + "d ago";
+        return "a while ago";
+    }
+
+    private String formatMessageTime(long millis) {
+        long diff = System.currentTimeMillis() - millis;
+        if (diff < 60_000) return "just now";
+        Date d = new Date(millis);
+        long diffDays = diff / 86_400_000;
+        if (diffDays == 0)
+            return new SimpleDateFormat("HH:mm", Locale.getDefault()).format(d);
+        if (diffDays == 1)
+            return "Yesterday " + new SimpleDateFormat("HH:mm", Locale.getDefault()).format(d);
+        return new SimpleDateFormat("MMM d, HH:mm", Locale.getDefault()).format(d);
     }
 
     private int dp(int val) {

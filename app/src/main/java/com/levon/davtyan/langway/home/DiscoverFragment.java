@@ -1,11 +1,11 @@
 package com.levon.davtyan.langway.home;
 
 import android.content.Intent;
-import android.util.Log;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Bundle;
 import android.util.Base64;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -37,6 +37,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class DiscoverFragment extends Fragment {
 
@@ -98,7 +99,13 @@ public class DiscoverFragment extends Fragment {
 
             FirebaseAuth.getInstance().removeAuthStateListener(authStateListener);
             myUid = firebaseAuth.getCurrentUser().getUid();
-            Log.d("LangwayDiscover", "AuthState ready, myUid=" + myUid);
+
+            // Stamp our own lastSeen immediately so others see us as active
+            FirebaseDatabase.getInstance()
+                    .getReference("users")
+                    .child(myUid)
+                    .child("lastSeen")
+                    .setValue(ServerValue.TIMESTAMP);
 
             FirebaseDatabase.getInstance()
                     .getReference("users")
@@ -110,18 +117,13 @@ public class DiscoverFragment extends Fragment {
                             myName  = strSnap(snapshot, "displayName", "");
                             myPhoto = strSnap(snapshot, "photo", "");
 
-                            DataSnapshot langsSnap = snapshot.child("languages");
-                            List<String> entries = new ArrayList<>();
-                            for (DataSnapshot entry : langsSnap.getChildren()) {
+                            for (DataSnapshot entry : snapshot.child("languages").getChildren()) {
                                 String lang  = entry.getKey();
                                 String level = entry.getValue(String.class);
                                 if (lang == null) continue;
                                 myLangKeys.add(lang);
                                 myLangPairs.add(lang + "|" + level);
-                                entries.add(FLAG_MAP.getOrDefault(lang, "🌐") + " " + lang + " · " + level);
                             }
-                            myLangStr = android.text.TextUtils.join("  ", entries);
-
                             for (DataSnapshot h : snapshot.child("hobbies").getChildren()) {
                                 String hobbyVal = h.getValue(String.class);
                                 if (hobbyVal == null) continue;
@@ -139,8 +141,8 @@ public class DiscoverFragment extends Fragment {
         FirebaseAuth.getInstance().addAuthStateListener(authStateListener);
     }
 
+    // ── Step 1: load all users ────────────────────────────────────────────────
     private void loadMatchingUsers() {
-        Log.d("LangwayDiscover", "loadMatchingUsers start");
         FirebaseDatabase.getInstance()
                 .getReference("users")
                 .get()
@@ -153,14 +155,18 @@ public class DiscoverFragment extends Fragment {
                         if (myUid.equals(uid)) continue;
 
                         Map<String, Object> data = new HashMap<>();
-                        data.put("_uid", uid);
+                        data.put("_uid",        uid);
                         data.put("displayName", strSnap(userSnap, "displayName", ""));
                         data.put("photo",       strSnap(userSnap, "photo", ""));
                         data.put("bio",         strSnap(userSnap, "bio", ""));
 
+                        Long lastSeen = userSnap.child("lastSeen").getValue(Long.class);
+                        data.put("lastSeen", lastSeen); // may be null for old accounts
+
                         Map<String, String> langsMap = new HashMap<>();
                         for (DataSnapshot e : userSnap.child("languages").getChildren()) {
-                            if (e.getKey() != null) langsMap.put(e.getKey(), e.getValue(String.class));
+                            if (e.getKey() != null)
+                                langsMap.put(e.getKey(), e.getValue(String.class));
                         }
                         data.put("languages", langsMap);
 
@@ -174,12 +180,83 @@ public class DiscoverFragment extends Fragment {
                         if (hasMatch(data)) allMatches.add(data);
                     }
 
-                    Log.d("LangwayDiscover", "Total matches: " + allMatches.size());
+                    // Step 2: fill in lastSeen from chat history for accounts that lack it
+                    enrichLastSeenFromChats();
+                })
+                .addOnFailureListener(e -> {
+                    if (isAdded()) showEmpty();
+                });
+    }
+
+    // ── Step 2: for every user without lastSeen, scan chats for their most
+    //            recent message timestamp and use that as a proxy ──────────────
+    private void enrichLastSeenFromChats() {
+        // Collect UIDs that still need a lastSeen value
+        List<String> needsEnrich = new ArrayList<>();
+        for (Map<String, Object> user : allMatches) {
+            Object ls = user.get("lastSeen");
+            if (!(ls instanceof Long) || (Long) ls == 0) {
+                needsEnrich.add(str(user, "_uid", ""));
+            }
+        }
+
+        if (needsEnrich.isEmpty()) {
+            // Everyone already has lastSeen — go straight to rendering
+            buildFilters();
+            renderCards(allMatches);
+            return;
+        }
+
+        // Load the full chats node once, then scan per-user
+        FirebaseDatabase.getInstance()
+                .getReference("chats")
+                .get()
+                .addOnSuccessListener(chatsSnapshot -> {
+                    if (!isAdded()) return;
+
+                    // Build a map: uid → max(lastTimestamp across all their chats)
+                    Map<String, Long> bestTs = new HashMap<>();
+
+                    for (DataSnapshot chat : chatsSnapshot.getChildren()) {
+                        Long ts = chat.child("lastTimestamp").getValue(Long.class);
+                        if (ts == null || ts == 0) continue;
+
+                        // participants is stored as a List or as individual children
+                        for (DataSnapshot p : chat.child("participants").getChildren()) {
+                            String uid = p.getValue(String.class);
+                            if (uid == null) continue;
+                            Long current = bestTs.get(uid);
+                            if (current == null || ts > current) bestTs.put(uid, ts);
+                        }
+                    }
+
+                    // Patch allMatches entries that had no lastSeen
+                    for (Map<String, Object> user : allMatches) {
+                        Object ls = user.get("lastSeen");
+                        if (!(ls instanceof Long) || (Long) ls == 0) {
+                            String uid = str(user, "_uid", "");
+                            Long derived = bestTs.get(uid);
+                            if (derived != null) {
+                                user.put("lastSeen", derived);
+                                // Also write it back to Firebase so next load is instant
+                                FirebaseDatabase.getInstance()
+                                        .getReference("users")
+                                        .child(uid)
+                                        .child("lastSeen")
+                                        .setValue(derived);
+                            }
+                        }
+                    }
+
                     buildFilters();
                     renderCards(allMatches);
                 })
                 .addOnFailureListener(e -> {
-                    if (isAdded()) showEmpty();
+                    // Chats read failed — just render without enrichment
+                    if (isAdded()) {
+                        buildFilters();
+                        renderCards(allMatches);
+                    }
                 });
     }
 
@@ -297,6 +374,7 @@ public class DiscoverFragment extends Fragment {
                 ? ("" + parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase()
                 : name.substring(0, Math.min(2, name.length())).toUpperCase();
 
+        // Avatar gradient background
         int[] grad = AVATAR_GRADIENTS[index % AVATAR_GRADIENTS.length];
         View panel = card.findViewById(R.id.person_avatar_panel);
         android.graphics.drawable.GradientDrawable gd =
@@ -318,38 +396,42 @@ public class DiscoverFragment extends Fragment {
             } catch (Exception ignored) {}
         }
 
+        // ── Online status ─────────────────────────────────────────────────────
+        Object lastSeenObj = user.get("lastSeen");
+        Long lastSeenMillis = lastSeenObj instanceof Long ? (Long) lastSeenObj : null;
+        String onlineStatus = formatOnlineStatus(lastSeenMillis);
+        ((TextView) card.findViewById(R.id.person_online_status)).setText(onlineStatus);
+        card.findViewById(R.id.person_online_dot).setVisibility(View.GONE);
+
+        // ── Languages (all) ───────────────────────────────────────────────────
         Object langsObj = user.get("languages");
-        String firstFlag = "🌐", langLine = "";
+        String langLine = "";
         if (langsObj instanceof Map) {
             List<String> entries = new ArrayList<>();
             for (Map.Entry<?, ?> e : ((Map<?, ?>) langsObj).entrySet()) {
                 String flag = FLAG_MAP.getOrDefault(e.getKey().toString(), "🌐");
-                if (firstFlag.equals("🌐")) firstFlag = flag;
                 entries.add(flag + " " + e.getKey() + " · " + e.getValue());
             }
             langLine = android.text.TextUtils.join("  ", entries);
         }
-        ((TextView) card.findViewById(R.id.person_flag)).setText(firstFlag);
         ((TextView) card.findViewById(R.id.person_languages)).setText(langLine);
         ((TextView) card.findViewById(R.id.person_name)).setText(name);
 
+        // ── Bio ───────────────────────────────────────────────────────────────
         Object hobbiesObj = user.get("hobbies");
         List<?> hobbies = hobbiesObj instanceof List ? (List<?>) hobbiesObj : null;
         String bio = storedBio.isEmpty() ? buildBio(hobbies) : storedBio;
         ((TextView) card.findViewById(R.id.person_bio)).setText(bio);
 
+        // ── Hobbies (all, tighter chips) ──────────────────────────────────────
         ChipGroup chipGroup = card.findViewById(R.id.person_hobby_chips);
         if (hobbies != null) {
-            int count = 0;
             for (Object h : hobbies) {
-                if (count++ >= 3) break;
                 String label = h.toString();
                 if (label.contains(" ")) label = label.substring(label.indexOf(" ") + 1);
                 chipGroup.addView(makeTinyChip(label));
             }
         }
-
-        if (index % 3 == 0) card.findViewById(R.id.person_online_dot).setVisibility(View.VISIBLE);
 
         final String fOtherUid   = otherUid;
         final String fOtherName  = name;
@@ -365,6 +447,23 @@ public class DiscoverFragment extends Fragment {
                 .setInterpolator(new DecelerateInterpolator()).start();
 
         cardsContainer.addView(card);
+    }
+
+    /**
+     * Human-readable last-seen string.
+     * Works for both new accounts (lastSeen written on app open) and old accounts
+     * (lastSeen derived from their most recent chat message).
+     */
+    private String formatOnlineStatus(Long lastSeenMillis) {
+        if (lastSeenMillis == null || lastSeenMillis == 0) return "offline";
+        long diff = System.currentTimeMillis() - lastSeenMillis;
+        if (diff < 60_000)      return "online now";
+        if (diff < 3_600_000)   return (diff / 60_000) + "m ago";
+        if (diff < 86_400_000)  return (diff / 3_600_000) + "h ago";
+        long days = diff / 86_400_000;
+        if (days == 1)          return "yesterday";
+        if (days < 7)           return days + "d ago";
+        return "a while ago";
     }
 
     private void startOrOpenChat(String otherUid, String otherName,
@@ -389,12 +488,12 @@ public class DiscoverFragment extends Fragment {
                         List<String> participants = Arrays.asList(myUid, otherUid);
 
                         Map<String, Object> chatData = new HashMap<>();
-                        chatData.put("participants",              participants);
-                        chatData.put("participantNames",          names);
-                        chatData.put("participantPhotos",         photos);
-                        chatData.put("otherLangs_" + myUid,      otherLangs);
-                        chatData.put("lastMessage",               "");
-                        chatData.put("lastTimestamp",             ServerValue.TIMESTAMP);
+                        chatData.put("participants",         participants);
+                        chatData.put("participantNames",     names);
+                        chatData.put("participantPhotos",    photos);
+                        chatData.put("otherLangs_" + myUid, otherLangs);
+                        chatData.put("lastMessage",          "");
+                        chatData.put("lastTimestamp",        ServerValue.TIMESTAMP);
 
                         FirebaseDatabase.getInstance()
                                 .getReference("chats")
@@ -404,9 +503,9 @@ public class DiscoverFragment extends Fragment {
 
                     if (!isAdded()) return;
                     Intent intent = new Intent(requireContext(), ChatActivity.class);
-                    intent.putExtra(ChatActivity.EXTRA_CHAT_ID,    chatId);
-                    intent.putExtra(ChatActivity.EXTRA_OTHER_UID,  otherUid);
-                    intent.putExtra(ChatActivity.EXTRA_OTHER_NAME, otherName);
+                    intent.putExtra(ChatActivity.EXTRA_CHAT_ID,     chatId);
+                    intent.putExtra(ChatActivity.EXTRA_OTHER_UID,   otherUid);
+                    intent.putExtra(ChatActivity.EXTRA_OTHER_NAME,  otherName);
                     intent.putExtra(ChatActivity.EXTRA_OTHER_LANGS, otherLangs);
                     intent.putExtra(ChatActivity.EXTRA_OTHER_PHOTO, otherPhoto);
                     startActivity(intent);
@@ -436,7 +535,8 @@ public class DiscoverFragment extends Fragment {
         chip.setChipStrokeColor(android.content.res.ColorStateList.valueOf(CHIP_STROKE));
         chip.setChipStrokeWidth(1f);
         chip.setTextSize(10f);
-        chip.setChipMinHeight(28f);
+        chip.setChipMinHeight(24f);  // tighter height
+        chip.setEnsureMinTouchTargetSize(false); // removes extra internal padding
         return chip;
     }
 
