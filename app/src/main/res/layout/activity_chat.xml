@@ -81,6 +81,26 @@
                 android:textSize="11sp" />
 
         </LinearLayout>
+
+        <ImageButton
+            android:id="@+id/chat_voice_call_btn"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginEnd="4dp"
+            android:background="@drawable/bg_call_btn"
+            android:padding="7dp"
+            android:src="@drawable/ic_call_voice"
+            android:contentDescription="Voice call" />
+
+        <ImageButton
+            android:id="@+id/chat_video_call_btn"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="@drawable/bg_call_btn"
+            android:padding="7dp"
+            android:src="@drawable/ic_call_video"
+            android:contentDescription="Video call" />
+
     </LinearLayout>
 
     <!-- Messages scroll area -->

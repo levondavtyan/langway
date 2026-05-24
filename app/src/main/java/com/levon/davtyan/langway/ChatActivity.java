@@ -52,6 +52,7 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 
+import android.content.Intent;
 import com.google.firebase.database.ValueEventListener;
 
 public class ChatActivity extends AppCompatActivity {
@@ -73,6 +74,8 @@ public class ChatActivity extends AppCompatActivity {
 
     private String myUid;
     private String chatId;
+    private String myName  = "";
+    private String myPhoto = "";
     private LinearLayout  messagesContainer;
     private NestedScrollView scrollView;
     private TextInputEditText inputField;
@@ -174,6 +177,68 @@ public class ChatActivity extends AppCompatActivity {
                 .getReference("chats").child(chatId).child("messages");
 
         listenForMessages();
+        fetchMyProfile();
+        wireCallButtons();
+    }
+
+    private void fetchMyProfile() {
+        FirebaseDatabase.getInstance().getReference("users").child(myUid).get()
+                .addOnSuccessListener(snap -> {
+                    if (snap.exists()) {
+                        String n = snap.child("displayName").getValue(String.class);
+                        String p = snap.child("photo").getValue(String.class);
+                        if (n != null) myName  = n;
+                        if (p != null) myPhoto = p;
+                    }
+                });
+    }
+
+    private void wireCallButtons() {
+        android.widget.ImageButton voiceBtn = findViewById(R.id.chat_voice_call_btn);
+        android.widget.ImageButton videoBtn = findViewById(R.id.chat_video_call_btn);
+        String otherUid  = getIntent().getStringExtra(EXTRA_OTHER_UID);
+        String otherName = getIntent().getStringExtra(EXTRA_OTHER_NAME);
+        String otherPhoto= getIntent().getStringExtra(EXTRA_OTHER_PHOTO);
+        if (voiceBtn != null) voiceBtn.setOnClickListener(v ->
+                initiateCall(otherUid, otherName, otherPhoto, false));
+        if (videoBtn != null) videoBtn.setOnClickListener(v ->
+                initiateCall(otherUid, otherName, otherPhoto, true));
+    }
+
+    /**
+     * Writes a call signal to Firebase under calls/{callId}
+     * then launches CallActivity in OUTGOING mode.
+     * The other user's HomeActivity listens for calls addressed to their UID.
+     */
+    private void initiateCall(String otherUid, String otherName, String otherPhoto, boolean isVideo) {
+        String callId = FirebaseDatabase.getInstance().getReference("calls").push().getKey();
+        if (callId == null) return;
+
+        Map<String, Object> callData = new HashMap<>();
+        callData.put("callId",      callId);
+        callData.put("callerUid",   myUid);
+        callData.put("callerName",  myName.isEmpty() ? "Unknown" : myName);
+        callData.put("callerPhoto", myPhoto);
+        callData.put("calleeUid",   otherUid);
+        callData.put("chatId",      chatId);
+        callData.put("isVideo",     isVideo);
+        callData.put("state",       "ringing");
+        callData.put("timestamp",   ServerValue.TIMESTAMP);
+
+        FirebaseDatabase.getInstance().getReference("calls")
+                .child(callId).setValue(callData)
+                .addOnSuccessListener(unused -> {
+                    Intent intent = new Intent(this, CallActivity.class);
+                    intent.putExtra(CallActivity.EXTRA_MODE,         CallActivity.MODE_OUTGOING);
+                    intent.putExtra(CallActivity.EXTRA_CALL_ID,      callId);
+                    intent.putExtra(CallActivity.EXTRA_CHAT_ID,      chatId);
+                    intent.putExtra(CallActivity.EXTRA_CALLER_NAME,  otherName);
+                    intent.putExtra(CallActivity.EXTRA_CALLER_PHOTO, otherPhoto);
+                    intent.putExtra(CallActivity.EXTRA_IS_VIDEO,     isVideo);
+                    intent.putExtra(CallActivity.EXTRA_MY_NAME,
+                            myName.isEmpty() ? "Unknown" : myName);
+                    startActivity(intent);
+                });
     }
 
     // ── Send text ─────────────────────────────────────────────────────────────
@@ -200,16 +265,15 @@ public class ChatActivity extends AppCompatActivity {
     // ── Mic button: hold to record ────────────────────────────────────────────
     private void setupMicButton() {
         micBtn.setOnTouchListener((v, event) -> {
-            switch (event.getAction()) {
-                case MotionEvent.ACTION_DOWN:
-                    checkPermissionAndStartRecording();
-                    return true;
-                case MotionEvent.ACTION_UP:
-                case MotionEvent.ACTION_CANCEL:
-                    if (isRecording) stopAndSendRecording();
-                    return true;
+            int action = event.getAction();
+            if (action == MotionEvent.ACTION_DOWN) {
+                checkPermissionAndStartRecording();
+                return true;
+            } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                if (isRecording) stopAndSendRecording();
+                return true;
             }
-            return false;
+            return true; // consume all touch events so UP is always delivered
         });
     }
 
@@ -240,7 +304,11 @@ public class ChatActivity extends AppCompatActivity {
     private void startRecording() {
         try {
             audioFile = new File(getCacheDir(), "voice_" + System.currentTimeMillis() + ".m4a");
-            mediaRecorder = new MediaRecorder();
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                mediaRecorder = new MediaRecorder(this);
+            } else {
+                mediaRecorder = new MediaRecorder();
+            }
             mediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
             mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
             mediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
@@ -303,8 +371,10 @@ public class ChatActivity extends AppCompatActivity {
         // Encode audio to base64 and upload
         try {
             FileInputStream fis = new FileInputStream(audioFile);
+            java.io.DataInputStream dis = new java.io.DataInputStream(fis);
             byte[] bytes = new byte[(int) audioFile.length()];
-            fis.read(bytes);
+            dis.readFully(bytes);
+            dis.close();
             fis.close();
             String b64 = Base64.encodeToString(bytes, Base64.NO_WRAP);
 
@@ -433,6 +503,16 @@ public class ChatActivity extends AppCompatActivity {
                 currentPlayer.pause();
                 playBtn.setImageResource(R.drawable.ic_play);
                 playBtn.setColorFilter(isMe ? Color.WHITE : Color.parseColor("#00C896"));
+                currentPlayBtn = null; // allow re-tap to resume
+                return;
+            }
+            // Resume paused playback on same bubble
+            if (currentPlayer != null && !currentPlayer.isPlaying() && currentPlayBtn == null
+                    && currentPlayer.getCurrentPosition() > 0) {
+                currentPlayer.start();
+                currentPlayBtn = playBtn;
+                playBtn.setImageResource(R.drawable.ic_pause);
+                playBtn.setColorFilter(isMe ? Color.WHITE : Color.parseColor("#00C896"));
                 return;
             }
             if (currentPlayer != null) {
@@ -453,11 +533,13 @@ public class ChatActivity extends AppCompatActivity {
 
                 currentPlayer = new MediaPlayer();
                 currentPlayer.setDataSource(tmp.getAbsolutePath());
-                currentPlayer.prepare();
-                currentPlayer.start();
                 currentPlayBtn = playBtn;
-                playBtn.setImageResource(R.drawable.ic_pause);
-                playBtn.setColorFilter(isMe ? Color.WHITE : Color.parseColor("#00C896"));
+
+                currentPlayer.setOnPreparedListener(mp -> {
+                    mp.start();
+                    playBtn.setImageResource(R.drawable.ic_pause);
+                    playBtn.setColorFilter(isMe ? Color.WHITE : Color.parseColor("#00C896"));
+                });
 
                 currentPlayer.setOnCompletionListener(mp -> {
                     playBtn.setImageResource(R.drawable.ic_play);
@@ -466,6 +548,17 @@ public class ChatActivity extends AppCompatActivity {
                     currentPlayer = null;
                     currentPlayBtn = null;
                 });
+
+                currentPlayer.setOnErrorListener((mp, what, extra) -> {
+                    Toast.makeText(ChatActivity.this, "Playback error: " + what, Toast.LENGTH_SHORT).show();
+                    playBtn.setImageResource(R.drawable.ic_play);
+                    mp.release();
+                    currentPlayer = null;
+                    currentPlayBtn = null;
+                    return true;
+                });
+
+                currentPlayer.prepareAsync();
             } catch (Exception e) {
                 Toast.makeText(this, "Could not play audio", Toast.LENGTH_SHORT).show();
             }
