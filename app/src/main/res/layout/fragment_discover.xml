@@ -17,6 +17,7 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
+            <!-- Header -->
             <FrameLayout
                 android:layout_width="match_parent"
                 android:layout_height="130dp"
@@ -52,28 +53,127 @@
                 </LinearLayout>
             </FrameLayout>
 
-            <HorizontalScrollView
-                android:id="@+id/discover_filter_scroll"
+            <!-- Filter panel: 3 rows -->
+            <LinearLayout
+                android:id="@+id/discover_filter_panel"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:orientation="vertical"
                 android:background="@color/surface"
                 android:elevation="4dp"
-                android:scrollbars="none"
-                android:paddingStart="12dp"
-                android:paddingEnd="12dp"
-                android:paddingTop="8dp"
-                android:paddingBottom="8dp">
+                android:paddingTop="10dp"
+                android:paddingBottom="10dp">
 
-                <com.google.android.material.chip.ChipGroup
-                    android:id="@+id/discover_filter_chips"
-                    android:layout_width="wrap_content"
+                <!-- Row 1: Languages -->
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    app:singleLine="true"
-                    app:chipSpacing="6dp"
-                    app:selectionRequired="false" />
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="8dp"
+                    android:paddingBottom="4dp">
 
-            </HorizontalScrollView>
+                    <TextView
+                        android:layout_width="72dp"
+                        android:layout_height="wrap_content"
+                        android:text="Language"
+                        android:textColor="@color/text_hint"
+                        android:textSize="11sp"
+                        android:textAllCaps="true"
+                        android:letterSpacing="0.08" />
 
+                    <HorizontalScrollView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:scrollbars="none">
+
+                        <com.google.android.material.chip.ChipGroup
+                            android:id="@+id/filter_chips_language"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            app:singleLine="true"
+                            app:chipSpacing="4dp"
+                            app:selectionRequired="false" />
+
+                    </HorizontalScrollView>
+                </LinearLayout>
+
+                <!-- Row 2: Proficiency -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="8dp"
+                    android:paddingBottom="4dp">
+
+                    <TextView
+                        android:layout_width="72dp"
+                        android:layout_height="wrap_content"
+                        android:text="Level"
+                        android:textColor="@color/text_hint"
+                        android:textSize="11sp"
+                        android:textAllCaps="true"
+                        android:letterSpacing="0.08" />
+
+                    <HorizontalScrollView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:scrollbars="none">
+
+                        <com.google.android.material.chip.ChipGroup
+                            android:id="@+id/filter_chips_proficiency"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            app:singleLine="true"
+                            app:chipSpacing="4dp"
+                            app:selectionRequired="false" />
+
+                    </HorizontalScrollView>
+                </LinearLayout>
+
+                <!-- Row 3: Hobbies -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="8dp">
+
+                    <TextView
+                        android:layout_width="72dp"
+                        android:layout_height="wrap_content"
+                        android:text="Hobbies"
+                        android:textColor="@color/text_hint"
+                        android:textSize="11sp"
+                        android:textAllCaps="true"
+                        android:letterSpacing="0.08" />
+
+                    <HorizontalScrollView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:scrollbars="none">
+
+                        <com.google.android.material.chip.ChipGroup
+                            android:id="@+id/filter_chips_hobbies"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            app:singleLine="true"
+                            app:chipSpacing="4dp"
+                            app:selectionRequired="false" />
+
+                    </HorizontalScrollView>
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <!-- Results -->
             <LinearLayout
                 android:id="@+id/discover_cards_container"
                 android:layout_width="match_parent"
@@ -104,7 +204,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
-                    android:text="No matches for this filter"
+                    android:text="No matches for these filters"
                     android:textColor="@color/text_secondary"
                     android:textSize="15sp"
                     android:textStyle="bold" />
@@ -113,7 +213,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:text="Try selecting a different interest"
+                    android:text="Try adjusting your selection"
                     android:textColor="@color/text_hint"
                     android:textSize="13sp" />
 

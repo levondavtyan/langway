@@ -35,10 +35,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
 
 public class DiscoverFragment extends Fragment {
 
@@ -64,18 +64,25 @@ public class DiscoverFragment extends Fragment {
             {0xFF43E97B, 0xFF38F9D7}, {0xFF667EEA, 0xFF764BA2},
     };
 
-    private ChipGroup    filterChips;
+    // ── Filter chip groups ────────────────────────────────────────────────────
+    private ChipGroup filterLang;
+    private ChipGroup filterProf;
+    private ChipGroup filterHobbies;
+
+    // Selected values per row (multi-select sets)
+    private final Set<String> selLanguages    = new LinkedHashSet<>();
+    private final Set<String> selProficiencies = new LinkedHashSet<>();
+    private final Set<String> selHobbies      = new LinkedHashSet<>();
+
     private LinearLayout cardsContainer;
     private LinearLayout emptyState;
 
     private final List<Map<String, Object>> allMatches = new ArrayList<>();
-    private String activeFilter = null;
     private AuthStateListener authStateListener;
 
     private String       myUid       = "";
     private String       myName      = "";
     private String       myPhoto     = "";
-    private String       myLangStr   = "";
     private Set<String>  myLangKeys  = new HashSet<>();
     private Set<String>  myHobbyKeys = new HashSet<>();
     private List<String> myLangPairs = new ArrayList<>();
@@ -90,48 +97,40 @@ public class DiscoverFragment extends Fragment {
     @Override
     public void onViewCreated(@NonNull View v, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(v, savedInstanceState);
-        filterChips    = v.findViewById(R.id.discover_filter_chips);
+        filterLang    = v.findViewById(R.id.filter_chips_language);
+        filterProf    = v.findViewById(R.id.filter_chips_proficiency);
+        filterHobbies = v.findViewById(R.id.filter_chips_hobbies);
         cardsContainer = v.findViewById(R.id.discover_cards_container);
         emptyState     = v.findViewById(R.id.discover_empty);
 
         authStateListener = firebaseAuth -> {
             if (!isAdded()) return;
             if (firebaseAuth.getCurrentUser() == null) return;
-
             FirebaseAuth.getInstance().removeAuthStateListener(authStateListener);
             myUid = firebaseAuth.getCurrentUser().getUid();
 
-            // Stamp our own lastSeen immediately so others see us as active
-            FirebaseDatabase.getInstance()
-                    .getReference("users")
-                    .child(myUid)
-                    .child("lastSeen")
-                    .setValue(ServerValue.TIMESTAMP);
+            FirebaseDatabase.getInstance().getReference("users")
+                    .child(myUid).child("lastSeen").setValue(ServerValue.TIMESTAMP);
 
-            FirebaseDatabase.getInstance()
-                    .getReference("users")
-                    .child(myUid)
-                    .get()
+            FirebaseDatabase.getInstance().getReference("users")
+                    .child(myUid).get()
                     .addOnSuccessListener(snapshot -> {
                         if (!isAdded()) return;
                         if (snapshot.exists()) {
                             myName  = strSnap(snapshot, "displayName", "");
                             myPhoto = strSnap(snapshot, "photo", "");
-
-                            for (DataSnapshot entry : snapshot.child("languages").getChildren()) {
-                                String lang  = entry.getKey();
-                                String level = entry.getValue(String.class);
+                            for (DataSnapshot e : snapshot.child("languages").getChildren()) {
+                                String lang  = e.getKey();
+                                String level = e.getValue(String.class);
                                 if (lang == null) continue;
                                 myLangKeys.add(lang);
-                                myLangPairs.add(lang + "|" + level);
+                                myLangPairs.add(lang + "|" + (level != null ? level : ""));
                             }
                             for (DataSnapshot h : snapshot.child("hobbies").getChildren()) {
-                                String hobbyVal = h.getValue(String.class);
-                                if (hobbyVal == null) continue;
-                                myHobbies.add(hobbyVal);
-                                String key = hobbyVal.contains(" ")
-                                        ? hobbyVal.substring(hobbyVal.indexOf(" ") + 1)
-                                        : hobbyVal;
+                                String val = h.getValue(String.class);
+                                if (val == null) continue;
+                                myHobbies.add(val);
+                                String key = val.contains(" ") ? val.substring(val.indexOf(" ") + 1) : val;
                                 myHobbyKeys.add(key.toLowerCase());
                             }
                         }
@@ -142,103 +141,75 @@ public class DiscoverFragment extends Fragment {
         FirebaseAuth.getInstance().addAuthStateListener(authStateListener);
     }
 
-    // ── Step 1: load all users (force fresh read — bypass local cache) ─────────
+    // ── Load users ────────────────────────────────────────────────────────────
+
     private void loadMatchingUsers() {
-        DatabaseReference usersRef = FirebaseDatabase.getInstance().getReference("users");
-        usersRef.addListenerForSingleValueEvent(new ValueEventListener() {
-            @Override
-            public void onDataChange(@NonNull DataSnapshot snapshot) {
-                if (!isAdded()) return;
-                allMatches.clear();
+        FirebaseDatabase.getInstance().getReference("users")
+                .addListenerForSingleValueEvent(new ValueEventListener() {
+                    @Override
+                    public void onDataChange(@NonNull DataSnapshot snapshot) {
+                        if (!isAdded()) return;
+                        allMatches.clear();
+                        for (DataSnapshot userSnap : snapshot.getChildren()) {
+                            String uid = userSnap.getKey();
+                            if (myUid.equals(uid)) continue;
+                            String userEmail = strSnap(userSnap, "email", "");
+                            if (userEmail.isEmpty()) continue;
 
-                for (DataSnapshot userSnap : snapshot.getChildren()) {
-                    String uid = userSnap.getKey();
-                    if (myUid.equals(uid)) continue;
+                            Map<String, Object> data = new HashMap<>();
+                            data.put("_uid",        uid);
+                            data.put("displayName", strSnap(userSnap, "displayName", ""));
+                            data.put("photo",       strSnap(userSnap, "photo", ""));
+                            data.put("bio",         strSnap(userSnap, "bio", ""));
+                            data.put("lastSeen",    userSnap.child("lastSeen").getValue(Long.class));
 
-                    Map<String, Object> data = new HashMap<>();
-                    data.put("_uid",        uid);
-                    data.put("displayName", strSnap(userSnap, "displayName", ""));
-                    data.put("photo",       strSnap(userSnap, "photo", ""));
-                    data.put("bio",         strSnap(userSnap, "bio", ""));
+                            Map<String, String> langsMap = new HashMap<>();
+                            for (DataSnapshot e : userSnap.child("languages").getChildren()) {
+                                if (e.getKey() != null)
+                                    langsMap.put(e.getKey(), e.getValue(String.class));
+                            }
+                            data.put("languages", langsMap);
 
-                    Long lastSeen = userSnap.child("lastSeen").getValue(Long.class);
-                    data.put("lastSeen", lastSeen);
+                            List<String> hobbiesList = new ArrayList<>();
+                            for (DataSnapshot h : userSnap.child("hobbies").getChildren()) {
+                                String val = h.getValue(String.class);
+                                if (val != null) hobbiesList.add(val);
+                            }
+                            data.put("hobbies", hobbiesList);
 
-                    Map<String, String> langsMap = new HashMap<>();
-                    for (DataSnapshot e : userSnap.child("languages").getChildren()) {
-                        if (e.getKey() != null)
-                            langsMap.put(e.getKey(), e.getValue(String.class));
+                            if (hasMatch(data)) allMatches.add(data);
+                        }
+                        enrichLastSeenFromChats();
                     }
-                    data.put("languages", langsMap);
-
-                    List<String> hobbiesList = new ArrayList<>();
-                    for (DataSnapshot h : userSnap.child("hobbies").getChildren()) {
-                        String val = h.getValue(String.class);
-                        if (val != null) hobbiesList.add(val);
+                    @Override public void onCancelled(@NonNull DatabaseError error) {
+                        if (isAdded()) showEmpty();
                     }
-                    data.put("hobbies", hobbiesList);
-
-                    // Only include users whose email is present in DB
-                    // (deleted Auth accounts still have a DB node but email won't
-                    //  be re-written, so this acts as a liveness check)
-                    String userEmail = strSnap(userSnap, "email", "");
-                    if (!userEmail.isEmpty() && hasMatch(data)) allMatches.add(data);
-                }
-
-                // Step 2: fill in lastSeen from chat history for accounts that lack it
-                enrichLastSeenFromChats();
-            }
-
-            @Override
-            public void onCancelled(@NonNull DatabaseError error) {
-                if (isAdded()) showEmpty();
-            }
-        });
+                });
     }
 
-    // ── Step 2: for every user without lastSeen, scan chats for their most
-    //            recent message timestamp and use that as a proxy ──────────────
     private void enrichLastSeenFromChats() {
-        // Collect UIDs that still need a lastSeen value
         List<String> needsEnrich = new ArrayList<>();
         for (Map<String, Object> user : allMatches) {
             Object ls = user.get("lastSeen");
-            if (!(ls instanceof Long) || (Long) ls == 0) {
-                needsEnrich.add(str(user, "_uid", ""));
-            }
+            if (!(ls instanceof Long) || (Long) ls == 0) needsEnrich.add(str(user, "_uid", ""));
         }
+        if (needsEnrich.isEmpty()) { buildFilters(); renderCards(allMatches); return; }
 
-        if (needsEnrich.isEmpty()) {
-            // Everyone already has lastSeen — go straight to rendering
-            buildFilters();
-            renderCards(allMatches);
-            return;
-        }
-
-        // Load the full chats node once, then scan per-user
-        FirebaseDatabase.getInstance()
-                .getReference("chats")
+        FirebaseDatabase.getInstance().getReference("chats")
                 .addListenerForSingleValueEvent(new ValueEventListener() {
-                    @Override
-                    public void onDataChange(@NonNull DataSnapshot chatsSnapshot) {
+                    @Override public void onDataChange(@NonNull DataSnapshot chatsSnapshot) {
                         if (!isAdded()) return;
-
-                        // Build a map: uid → max(lastTimestamp across all their chats)
                         Map<String, Long> bestTs = new HashMap<>();
-
                         for (DataSnapshot chat : chatsSnapshot.getChildren()) {
                             Long ts = chat.child("lastTimestamp").getValue(Long.class);
                             if (ts == null || ts == 0) continue;
-
                             for (DataSnapshot p : chat.child("participants").getChildren()) {
                                 String uid = p.getValue(String.class);
                                 if (uid == null) continue;
-                                Long current = bestTs.get(uid);
-                                if (current == null || ts > current) bestTs.put(uid, ts);
+                                Long cur = bestTs.get(uid);
+                                if (cur == null || ts > cur) bestTs.put(uid, ts);
                             }
                         }
-
-                        // Patch allMatches entries that had no lastSeen
                         for (Map<String, Object> user : allMatches) {
                             Object ls = user.get("lastSeen");
                             if (!(ls instanceof Long) || (Long) ls == 0) {
@@ -246,27 +217,16 @@ public class DiscoverFragment extends Fragment {
                                 Long derived = bestTs.get(uid);
                                 if (derived != null) {
                                     user.put("lastSeen", derived);
-                                    // Write back so next load is instant
-                                    FirebaseDatabase.getInstance()
-                                            .getReference("users")
-                                            .child(uid)
-                                            .child("lastSeen")
-                                            .setValue(derived);
+                                    FirebaseDatabase.getInstance().getReference("users")
+                                            .child(uid).child("lastSeen").setValue(derived);
                                 }
                             }
                         }
-
                         buildFilters();
                         renderCards(allMatches);
                     }
-
-                    @Override
-                    public void onCancelled(@NonNull DatabaseError error) {
-                        // Chats read failed — render without enrichment
-                        if (isAdded()) {
-                            buildFilters();
-                            renderCards(allMatches);
-                        }
+                    @Override public void onCancelled(@NonNull DatabaseError error) {
+                        if (isAdded()) { buildFilters(); renderCards(allMatches); }
                     }
                 });
     }
@@ -274,9 +234,8 @@ public class DiscoverFragment extends Fragment {
     private boolean hasMatch(Map<String, Object> user) {
         Object langsObj = user.get("languages");
         if (langsObj instanceof Map) {
-            for (Object key : ((Map<?, ?>) langsObj).keySet()) {
+            for (Object key : ((Map<?, ?>) langsObj).keySet())
                 if (myLangKeys.contains(key.toString())) return true;
-            }
         }
         Object hobbiesObj = user.get("hobbies");
         if (hobbiesObj instanceof List) {
@@ -289,74 +248,129 @@ public class DiscoverFragment extends Fragment {
         return false;
     }
 
+    // ── Build filter chips ────────────────────────────────────────────────────
+
     private void buildFilters() {
         if (!isAdded()) return;
-        filterChips.removeAllViews();
-        addFilterChip("All", true);
+        filterLang.removeAllViews();
+        filterProf.removeAllViews();
+        filterHobbies.removeAllViews();
+
+        // Row 1: MY languages only (from my own profile)
+        Set<String> myLevels = new LinkedHashSet<>();
         for (String pair : myLangPairs) {
-            String lang = pair.split("\\|")[0];
-            addFilterChip(FLAG_MAP.getOrDefault(lang, "🌐") + " " + lang, false);
+            String[] parts = pair.split("\\|", 2);
+            String lang  = parts[0];
+            String level = parts.length > 1 ? parts[1] : "";
+            addFilterChip(filterLang, FLAG_MAP.getOrDefault(lang, "\uD83C\uDF10") + " " + lang, selLanguages, lang);
+            if (!level.isEmpty()) myLevels.add(level);
         }
-        for (String hobby : myHobbies) {
-            String label = hobby.contains(" ") ? hobby.substring(hobby.indexOf(" ") + 1) : hobby;
-            addFilterChip(label, false);
+
+        // Row 2: All CEFR levels always shown (not just user's own)
+        String[][] allLevels = {
+                {"A1","A1 - Beginner"}, {"A2","A2 - Elementary"},
+                {"B1","B1 - Intermediate"}, {"B2","B2 - Upper Intermediate"},
+                {"C1","C1 - Advanced"}, {"C2","C2 - Mastery"}
+        };
+        for (String[] lvl : allLevels)
+            addFilterChip(filterProf, lvl[1], selProficiencies, lvl[0]);
+
+        // Row 3: MY hobbies only (from my own profile)
+        Set<String> myHobbyLabels = new LinkedHashSet<>();
+        for (String h : myHobbies) {
+            String label = h.contains(" ") ? h.substring(h.indexOf(" ") + 1) : h;
+            myHobbyLabels.add(label);
         }
+        for (String hobby : myHobbyLabels)
+            addFilterChip(filterHobbies, hobby, selHobbies, hobby);
     }
 
-    private void addFilterChip(String label, boolean selected) {
+    private void addFilterChip(ChipGroup group, String label,
+                               Set<String> selSet, String value) {
         Chip chip = new Chip(requireContext());
         chip.setText(label);
         chip.setCheckable(true);
-        chip.setChecked(selected);
-        chip.setChipBackgroundColor(android.content.res.ColorStateList.valueOf(
-                selected ? CHIP_SEL_BG : CHIP_UNSEL_BG));
-        chip.setTextColor(selected ? CHIP_SEL_TEXT : CHIP_UNSEL_TEXT);
+        chip.setChecked(false);
+        chip.setChipBackgroundColor(android.content.res.ColorStateList.valueOf(CHIP_UNSEL_BG));
+        chip.setTextColor(CHIP_UNSEL_TEXT);
         chip.setChipStrokeColor(android.content.res.ColorStateList.valueOf(CHIP_STROKE));
         chip.setChipStrokeWidth(1f);
         chip.setCheckedIconVisible(false);
-        chip.setTextSize(13f);
+        chip.setTextSize(12f);
+        chip.setEnsureMinTouchTargetSize(false);
+
         chip.setOnClickListener(v -> {
-            for (int i = 0; i < filterChips.getChildCount(); i++) {
-                Chip c = (Chip) filterChips.getChildAt(i);
-                c.setChipBackgroundColor(android.content.res.ColorStateList.valueOf(CHIP_UNSEL_BG));
-                c.setTextColor(CHIP_UNSEL_TEXT);
+            boolean nowSelected = !selSet.contains(value);
+            if (nowSelected) {
+                selSet.add(value);
+                chip.setChipBackgroundColor(android.content.res.ColorStateList.valueOf(CHIP_SEL_BG));
+                chip.setTextColor(CHIP_SEL_TEXT);
+            } else {
+                selSet.remove(value);
+                chip.setChipBackgroundColor(android.content.res.ColorStateList.valueOf(CHIP_UNSEL_BG));
+                chip.setTextColor(CHIP_UNSEL_TEXT);
             }
-            chip.setChipBackgroundColor(android.content.res.ColorStateList.valueOf(CHIP_SEL_BG));
-            chip.setTextColor(CHIP_SEL_TEXT);
-            activeFilter = label.equals("All") ? null : label;
-            applyFilter();
+            applyFilters();
         });
-        filterChips.addView(chip);
+
+        group.addView(chip);
     }
 
-    private void applyFilter() {
-        if (activeFilter == null) { renderCards(allMatches); return; }
+    // ── Apply all 3 filter rows (AND between rows, OR within each row) ─────────
+
+    private void applyFilters() {
+        // If nothing selected in a row → that row is "all" (no restriction)
         List<Map<String, Object>> filtered = new ArrayList<>();
         for (Map<String, Object> user : allMatches) {
-            if (matchesChip(user, activeFilter)) filtered.add(user);
+            if (passesLanguageFilter(user)
+                    && passesProficiencyFilter(user)
+                    && passesHobbyFilter(user)) {
+                filtered.add(user);
+            }
         }
         renderCards(filtered);
     }
 
-    private boolean matchesChip(Map<String, Object> user, String filter) {
-        Object hobbiesObj = user.get("hobbies");
-        if (hobbiesObj instanceof List) {
-            for (Object h : (List<?>) hobbiesObj) {
-                String label = h.toString();
-                if (label.contains(" ")) label = label.substring(label.indexOf(" ") + 1);
-                if (label.equalsIgnoreCase(filter)) return true;
-            }
-        }
+    private boolean passesLanguageFilter(Map<String, Object> user) {
+        if (selLanguages.isEmpty()) return true;
         Object langsObj = user.get("languages");
-        if (langsObj instanceof Map) {
-            for (Object key : ((Map<?, ?>) langsObj).keySet()) {
-                String flag = FLAG_MAP.getOrDefault(key.toString(), "🌐");
-                if ((flag + " " + key).equalsIgnoreCase(filter)
-                        || key.toString().equalsIgnoreCase(filter)) return true;
+        if (!(langsObj instanceof Map)) return false;
+        for (Object key : ((Map<?, ?>) langsObj).keySet()) {
+            String lang = key.toString();
+            // selLanguages stores raw lang name (without flag)
+            if (selLanguages.contains(lang)) return true;
+        }
+        return false;
+    }
+
+    private boolean passesProficiencyFilter(Map<String, Object> user) {
+        if (selProficiencies.isEmpty()) return true;
+        Object langsObj = user.get("languages");
+        if (!(langsObj instanceof Map)) return false;
+        for (Object val : ((Map<?, ?>) langsObj).values()) {
+            if (val == null) continue;
+            String userLevel = val.toString(); // e.g. "B2 - Upper Intermediate" or "B2"
+            for (String sel : selProficiencies) {
+                // sel is the CEFR code e.g. "A1","B2"
+                if (userLevel.startsWith(sel)) return true;
             }
         }
         return false;
     }
+
+    private boolean passesHobbyFilter(Map<String, Object> user) {
+        if (selHobbies.isEmpty()) return true;
+        Object hobbiesObj = user.get("hobbies");
+        if (!(hobbiesObj instanceof List)) return false;
+        for (Object h : (List<?>) hobbiesObj) {
+            String label = h.toString();
+            if (label.contains(" ")) label = label.substring(label.indexOf(" ") + 1);
+            if (selHobbies.contains(label)) return true;
+        }
+        return false;
+    }
+
+    // ── Render ────────────────────────────────────────────────────────────────
 
     private void renderCards(List<Map<String, Object>> users) {
         if (!isAdded()) return;
@@ -385,7 +399,6 @@ public class DiscoverFragment extends Fragment {
                 ? ("" + parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase()
                 : name.substring(0, Math.min(2, name.length())).toUpperCase();
 
-        // Avatar gradient background
         int[] grad = AVATAR_GRADIENTS[index % AVATAR_GRADIENTS.length];
         View panel = card.findViewById(R.id.person_avatar_panel);
         android.graphics.drawable.GradientDrawable gd =
@@ -409,7 +422,6 @@ public class DiscoverFragment extends Fragment {
 
         card.findViewById(R.id.person_online_dot).setVisibility(View.GONE);
 
-        // ── Languages (all) ───────────────────────────────────────────────────
         Object langsObj = user.get("languages");
         String langLine = "";
         if (langsObj instanceof Map) {
@@ -423,13 +435,11 @@ public class DiscoverFragment extends Fragment {
         ((TextView) card.findViewById(R.id.person_languages)).setText(langLine);
         ((TextView) card.findViewById(R.id.person_name)).setText(name);
 
-        // ── Bio ───────────────────────────────────────────────────────────────
         Object hobbiesObj = user.get("hobbies");
         List<?> hobbies = hobbiesObj instanceof List ? (List<?>) hobbiesObj : null;
         String bio = storedBio.isEmpty() ? buildBio(hobbies) : storedBio;
         ((TextView) card.findViewById(R.id.person_bio)).setText(bio);
 
-        // ── Hobbies (all, tighter chips) ──────────────────────────────────────
         ChipGroup chipGroup = card.findViewById(R.id.person_hobby_chips);
         if (hobbies != null) {
             for (Object h : hobbies) {
@@ -443,9 +453,21 @@ public class DiscoverFragment extends Fragment {
         final String fOtherName  = name;
         final String fOtherPhoto = photoB64;
         final String fLangLine   = langLine;
+        final String fBio        = storedBio;
         card.findViewById(R.id.person_chat_btn).setOnClickListener(v ->
-                startOrOpenChat(fOtherUid, fOtherName, fOtherPhoto, fLangLine)
-        );
+                startOrOpenChat(fOtherUid, fOtherName, fOtherPhoto, fLangLine));
+        card.findViewById(R.id.person_view_profile_btn).setOnClickListener(v -> {
+            Intent intent = new Intent(requireContext(), UserProfileActivity.class);
+            intent.putExtra(UserProfileActivity.EXTRA_UID,       fOtherUid);
+            intent.putExtra(UserProfileActivity.EXTRA_NAME,      fOtherName);
+            intent.putExtra(UserProfileActivity.EXTRA_PHOTO,     fOtherPhoto);
+            intent.putExtra(UserProfileActivity.EXTRA_BIO,       fBio);
+            intent.putExtra(UserProfileActivity.EXTRA_LANG_LINE, fLangLine);
+            intent.putExtra(UserProfileActivity.EXTRA_MY_UID,    myUid);
+            intent.putExtra(UserProfileActivity.EXTRA_MY_NAME,   myName);
+            intent.putExtra(UserProfileActivity.EXTRA_MY_PHOTO,  myPhoto);
+            startActivity(intent);
+        });
 
         card.setAlpha(0f); card.setTranslationY(20f);
         card.animate().alpha(1f).translationY(0f)
@@ -461,35 +483,26 @@ public class DiscoverFragment extends Fragment {
         Arrays.sort(uids);
         String chatId = uids[0] + "_" + uids[1];
 
-        FirebaseDatabase.getInstance()
-                .getReference("chats")
-                .child(chatId)
-                .get()
+        FirebaseDatabase.getInstance().getReference("chats").child(chatId).get()
                 .addOnSuccessListener(snapshot -> {
                     if (!snapshot.exists()) {
                         Map<String, Object> names  = new HashMap<>();
                         Map<String, Object> photos = new HashMap<>();
-                        names.put(myUid,    myName);
-                        names.put(otherUid, otherName);
+                        names.put(myUid, myName); names.put(otherUid, otherName);
                         if (!myPhoto.isEmpty())    photos.put(myUid,    myPhoto);
                         if (!otherPhoto.isEmpty()) photos.put(otherUid, otherPhoto);
 
-                        List<String> participants = Arrays.asList(myUid, otherUid);
-
                         Map<String, Object> chatData = new HashMap<>();
-                        chatData.put("participants",         participants);
+                        chatData.put("participants",         Arrays.asList(myUid, otherUid));
                         chatData.put("participantNames",     names);
                         chatData.put("participantPhotos",    photos);
                         chatData.put("otherLangs_" + myUid, otherLangs);
                         chatData.put("lastMessage",          "");
                         chatData.put("lastTimestamp",        ServerValue.TIMESTAMP);
 
-                        FirebaseDatabase.getInstance()
-                                .getReference("chats")
-                                .child(chatId)
-                                .setValue(chatData);
+                        FirebaseDatabase.getInstance().getReference("chats")
+                                .child(chatId).setValue(chatData);
                     }
-
                     if (!isAdded()) return;
                     Intent intent = new Intent(requireContext(), ChatActivity.class);
                     intent.putExtra(ChatActivity.EXTRA_CHAT_ID,     chatId);
@@ -547,8 +560,7 @@ public class DiscoverFragment extends Fragment {
     @Override
     public void onDestroyView() {
         super.onDestroyView();
-        if (authStateListener != null) {
+        if (authStateListener != null)
             FirebaseAuth.getInstance().removeAuthStateListener(authStateListener);
-        }
     }
 }
