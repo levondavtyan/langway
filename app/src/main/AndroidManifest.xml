@@ -57,6 +57,12 @@
             android:supportsPictureInPicture="true"
             android:windowSoftInputMode="adjustResize" />
 
+        <!-- Other user's profile view -->
+        <activity
+            android:name=".home.UserProfileActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
         <!-- In-call screen: WebRTC audio/video, no third-party account needed -->
         <activity
             android:name=".WebRTCCallActivity"
