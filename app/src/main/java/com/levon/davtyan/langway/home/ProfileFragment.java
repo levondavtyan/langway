@@ -1,44 +1,48 @@
 package com.levon.davtyan.langway.home;
 
+import android.app.Activity;
 import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.net.Uri;
 import android.os.Bundle;
+import android.provider.MediaStore;
+import android.util.Base64;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
+import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.android.material.textfield.TextInputEditText;
 import com.google.firebase.auth.EmailAuthProvider;
-import com.google.firebase.auth.FirebaseAuthRecentLoginRequiredException;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
-import com.google.android.material.dialog.MaterialAlertDialogBuilder;
-import androidx.annotation.NonNull;
-import com.google.firebase.database.DataSnapshot;
-import com.google.firebase.database.FirebaseDatabase;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.util.Base64;
-import android.widget.ImageView;
 import com.levon.davtyan.langway.MainActivity;
-import androidx.cardview.widget.CardView;
 import com.levon.davtyan.langway.R;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -49,15 +53,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
 
+import androidx.cardview.widget.CardView;
+
 public class ProfileFragment extends Fragment {
 
     private static final String TAG = "ProfileFragment";
     private static final String GROK_API_KEY = "YOUR_GROK_API_KEY";
 
-    private static final int CHIP_BLUE_BG   = 0xFFE3ECFF;
-    private static final int CHIP_BLUE_TEXT = 0xFF1A56CC;
-    private static final int CHIP_GREEN_BG  = 0xFFDFFAF3;
-    private static final int CHIP_GREEN_TEXT= 0xFF00A87A;
+    private static final int CHIP_BLUE_BG    = 0xFFE3ECFF;
+    private static final int CHIP_BLUE_TEXT  = 0xFF1A56CC;
+    private static final int CHIP_GREEN_BG   = 0xFFDFFAF3;
+    private static final int CHIP_GREEN_TEXT = 0xFF00A87A;
 
     private static final Map<String, String> FLAG_MAP = new HashMap<String, String>() {{
         put("English","🇬🇧"); put("Spanish","🇪🇸"); put("Russian","🇷🇺");
@@ -66,6 +72,48 @@ public class ProfileFragment extends Fragment {
         put("Portuguese","🇵🇹"); put("Arabic","🇸🇦"); put("Korean","🇰🇷");
         put("Dutch","🇳🇱"); put("Swedish","🇸🇪"); put("Turkish","🇹🇷");
     }};
+
+    // ── Views ─────────────────────────────────────────────────────────────────
+    private TextView    nameView;
+    private TextView    emailView;
+    private TextView    bioView;
+    private TextView    initialsView;
+    private ImageView   photoView;
+
+    // ── State ─────────────────────────────────────────────────────────────────
+    private String      currentPhotoB64 = null;  // null = no photo
+    private String      currentUid      = null;
+
+    // ── Photo picker (bottom sheet context) ───────────────────────────────────
+    private Bitmap          pendingPhotoBitmap = null;
+    private boolean         photoRemoved       = false;
+    private ImageView       sheetPhotoView;
+    private TextView        sheetInitialsView;
+
+    private final ActivityResultLauncher<Intent> photoPickerLauncher =
+            registerForActivityResult(
+                    new ActivityResultContracts.StartActivityForResult(),
+                    result -> {
+                        if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
+                            Uri uri = result.getData().getData();
+                            try {
+                                Bitmap bmp = MediaStore.Images.Media.getBitmap(
+                                        requireActivity().getContentResolver(), uri);
+                                // Downscale to max 512px on longest side to keep Firebase size small
+                                bmp = scaleBitmap(bmp, 512);
+                                pendingPhotoBitmap = bmp;
+                                photoRemoved = false;
+                                if (sheetPhotoView != null) {
+                                    sheetPhotoView.setImageBitmap(bmp);
+                                    sheetPhotoView.setVisibility(View.VISIBLE);
+                                    sheetInitialsView.setVisibility(View.GONE);
+                                }
+                            } catch (Exception e) {
+                                Toast.makeText(requireContext(), "Couldn't load image",
+                                        Toast.LENGTH_SHORT).show();
+                            }
+                        }
+                    });
 
     @Nullable
     @Override
@@ -78,26 +126,28 @@ public class ProfileFragment extends Fragment {
     public void onViewCreated(@NonNull View v, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(v, savedInstanceState);
 
-        TextView      nameView    = v.findViewById(R.id.profile_name);
-        TextView      emailView   = v.findViewById(R.id.profile_email);
-        TextView      bioView     = v.findViewById(R.id.profile_bio);
-        ImageView     photoView   = v.findViewById(R.id.profile_photo);
-        LinearLayout  pathCards   = v.findViewById(R.id.profile_path_cards);
-        CardView      hobbiesCard = v.findViewById(R.id.profile_hobbies_card);
-        ChipGroup     hobbyChips  = v.findViewById(R.id.profile_hobby_chips);
+        nameView     = v.findViewById(R.id.profile_name);
+        emailView    = v.findViewById(R.id.profile_email);
+        bioView      = v.findViewById(R.id.profile_bio);
+        photoView    = v.findViewById(R.id.profile_photo);
+        initialsView = v.findViewById(R.id.profile_initials);
+        LinearLayout pathCards   = v.findViewById(R.id.profile_path_cards);
+        CardView     hobbiesCard = v.findViewById(R.id.profile_hobbies_card);
+        ChipGroup    hobbyChips  = v.findViewById(R.id.profile_hobby_chips);
         MaterialButton signOutBtn = v.findViewById(R.id.profile_sign_out_btn);
 
+        // Edit button & photo badge both open the edit sheet
+        v.findViewById(R.id.profile_edit_btn).setOnClickListener(btn -> openEditSheet());
+        v.findViewById(R.id.profile_photo_edit_badge).setOnClickListener(btn -> openEditSheet());
+
         Bundle args = getArguments();
-        String firstName = "";
         List<String> langPairsArg = new ArrayList<>();
         List<String> hobbiesArg   = new ArrayList<>();
 
         if (args != null) {
             String name = args.getString("name", "");
-            if (!name.isEmpty()) {
-                nameView.setText(name);
-                firstName = name.contains(" ") ? name.split(" ")[0] : name;
-            }
+            if (!name.isEmpty()) nameView.setText(name);
+            setInitials(name);
             ArrayList<String> langs   = args.getStringArrayList("languages");
             ArrayList<String> hobbies = args.getStringArrayList("hobbies");
             if (langs   != null) langPairsArg.addAll(langs);
@@ -107,27 +157,27 @@ public class ProfileFragment extends Fragment {
             }
         }
 
-        final String fFirstName  = firstName;
         final List<String> fLangPairs = langPairsArg;
         final List<String> fHobbies   = hobbiesArg;
 
         com.google.firebase.auth.FirebaseUser fbUser = FirebaseAuth.getInstance().getCurrentUser();
         if (fbUser != null) {
+            currentUid = fbUser.getUid();
             if (fbUser.getEmail() != null) emailView.setText(fbUser.getEmail());
 
             FirebaseDatabase.getInstance()
-                    .getReference("users")
-                    .child(fbUser.getUid())
+                    .getReference("users").child(fbUser.getUid())
                     .get()
                     .addOnSuccessListener(snapshot -> {
                         if (!isAdded() || !snapshot.exists()) {
-                            buildPathCards(pathCards, fLangPairs, fHobbies, fFirstName);
+                            buildPathCards(pathCards, fLangPairs, fHobbies, "");
                             return;
                         }
-
                         String displayName = snapshot.child("displayName").getValue(String.class);
-                        if (displayName != null && !displayName.isEmpty())
+                        if (displayName != null && !displayName.isEmpty()) {
                             nameView.setText(displayName);
+                            setInitials(displayName);
+                        }
 
                         String bio = snapshot.child("bio").getValue(String.class);
                         if (bio != null && !bio.isEmpty()) {
@@ -137,12 +187,8 @@ public class ProfileFragment extends Fragment {
 
                         String photoB64 = snapshot.child("photo").getValue(String.class);
                         if (photoB64 != null && !photoB64.isEmpty()) {
-                            try {
-                                byte[] bytes = Base64.decode(photoB64, Base64.DEFAULT);
-                                Bitmap bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
-                                photoView.setImageBitmap(bmp);
-                                photoView.setVisibility(View.VISIBLE);
-                            } catch (Exception ignored) {}
+                            currentPhotoB64 = photoB64;
+                            applyPhotoToView(photoB64, photoView, initialsView);
                         }
 
                         List<String> langPairs = new ArrayList<>();
@@ -151,7 +197,6 @@ public class ProfileFragment extends Fragment {
                             String level = entry.getValue(String.class);
                             if (lang != null) langPairs.add(lang + "|" + level);
                         }
-
                         List<String> hobbies = new ArrayList<>();
                         for (DataSnapshot h : snapshot.child("hobbies").getChildren()) {
                             String val = h.getValue(String.class);
@@ -159,15 +204,15 @@ public class ProfileFragment extends Fragment {
                         }
                         if (!hobbies.isEmpty()) showHobbyChips(hobbyChips, hobbiesCard, hobbies);
 
-                        String fn = displayName != null && displayName.contains(" ")
-                                ? displayName.split(" ")[0]
-                                : (displayName != null ? displayName : fFirstName);
-
-                        buildPathCards(pathCards, langPairs, hobbies, fn);
+                        String fn = displayName != null
+                                ? (displayName.contains(" ") ? displayName.split(" ")[0] : displayName)
+                                : "";
+                        buildPathCards(pathCards, langPairs.isEmpty() ? fLangPairs : langPairs,
+                                hobbies.isEmpty() ? fHobbies : hobbies, fn);
                     })
-                    .addOnFailureListener(e -> buildPathCards(pathCards, fLangPairs, fHobbies, fFirstName));
+                    .addOnFailureListener(e -> buildPathCards(pathCards, fLangPairs, fHobbies, ""));
         } else {
-            buildPathCards(pathCards, fLangPairs, fHobbies, fFirstName);
+            buildPathCards(pathCards, fLangPairs, fHobbies, "");
         }
 
         signOutBtn.setOnClickListener(btn -> {
@@ -178,25 +223,182 @@ public class ProfileFragment extends Fragment {
             requireActivity().overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
         });
 
-        com.google.android.material.button.MaterialButton deleteBtn =
-                v.findViewById(R.id.profile_delete_account_btn);
-        deleteBtn.setOnClickListener(btn -> showDeleteConfirmDialog());
+        v.findViewById(R.id.profile_delete_account_btn)
+                .setOnClickListener(btn -> showDeleteConfirmDialog());
     }
+
+    // ── Edit profile bottom sheet ─────────────────────────────────────────────
+
+    private void openEditSheet() {
+        BottomSheetDialog sheet = new BottomSheetDialog(requireContext());
+        View sv = LayoutInflater.from(requireContext())
+                .inflate(R.layout.bottom_sheet_edit_profile, null);
+        sheet.setContentView(sv);
+
+        sheetPhotoView    = sv.findViewById(R.id.edit_profile_photo);
+        sheetInitialsView = sv.findViewById(R.id.edit_profile_initials);
+        TextInputEditText nameEdit = sv.findViewById(R.id.edit_profile_name);
+        TextInputEditText bioEdit  = sv.findViewById(R.id.edit_profile_bio);
+        MaterialButton    saveBtn  = sv.findViewById(R.id.edit_profile_save_btn);
+        MaterialButton    pickBtn  = sv.findViewById(R.id.edit_profile_pick_photo_btn);
+        MaterialButton    removeBtn= sv.findViewById(R.id.edit_profile_remove_photo_btn);
+
+        // Pre-fill current values
+        nameEdit.setText(nameView.getText());
+        String currentBio = bioView.getText().toString();
+        if (!currentBio.isEmpty()) bioEdit.setText(currentBio);
+
+        // Pre-fill photo
+        pendingPhotoBitmap = null;
+        photoRemoved = false;
+        if (currentPhotoB64 != null) {
+            applyPhotoToView(currentPhotoB64, sheetPhotoView, sheetInitialsView);
+        } else {
+            String name = nameView.getText().toString();
+            sheetInitialsView.setText(getInitials(name));
+            sheetInitialsView.setVisibility(View.VISIBLE);
+            sheetPhotoView.setVisibility(View.GONE);
+        }
+
+        pickBtn.setOnClickListener(v -> {
+            Intent intent = new Intent(Intent.ACTION_PICK,
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+            intent.setType("image/*");
+            photoPickerLauncher.launch(intent);
+        });
+
+        removeBtn.setOnClickListener(v -> {
+            pendingPhotoBitmap = null;
+            photoRemoved = true;
+            sheetPhotoView.setVisibility(View.GONE);
+            sheetInitialsView.setText(getInitials(nameEdit.getText().toString()));
+            sheetInitialsView.setVisibility(View.VISIBLE);
+        });
+
+        saveBtn.setOnClickListener(v -> {
+            String newName = nameEdit.getText() != null
+                    ? nameEdit.getText().toString().trim() : "";
+            String newBio  = bioEdit.getText() != null
+                    ? bioEdit.getText().toString().trim() : "";
+
+            if (newName.isEmpty()) {
+                nameEdit.setError("Name cannot be empty");
+                return;
+            }
+
+            saveBtn.setEnabled(false);
+            saveBtn.setText("Saving…");
+
+            String newPhotoB64;
+            if (pendingPhotoBitmap != null) {
+                // Compress new photo to JPEG base64
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                pendingPhotoBitmap.compress(Bitmap.CompressFormat.JPEG, 80, baos);
+                newPhotoB64 = Base64.encodeToString(baos.toByteArray(), Base64.DEFAULT);
+            } else if (photoRemoved) {
+                newPhotoB64 = "";
+            } else {
+                newPhotoB64 = currentPhotoB64 != null ? currentPhotoB64 : "";
+            }
+
+            saveProfile(newName, newBio, newPhotoB64, saveBtn, sheet);
+        });
+
+        sheet.show();
+    }
+
+    private void saveProfile(String name, String bio, String photoB64,
+                             MaterialButton saveBtn, BottomSheetDialog sheet) {
+        if (currentUid == null) return;
+
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("displayName", name);
+        updates.put("bio", bio);
+        updates.put("photo", photoB64);
+
+        FirebaseDatabase.getInstance()
+                .getReference("users").child(currentUid)
+                .updateChildren(updates)
+                .addOnSuccessListener(unused -> {
+                    if (!isAdded()) return;
+                    // Update local UI
+                    nameView.setText(name);
+                    setInitials(name);
+
+                    if (!bio.isEmpty()) {
+                        bioView.setText(bio);
+                        bioView.setVisibility(View.VISIBLE);
+                    } else {
+                        bioView.setVisibility(View.GONE);
+                    }
+
+                    if (!photoB64.isEmpty()) {
+                        currentPhotoB64 = photoB64;
+                        applyPhotoToView(photoB64, photoView, initialsView);
+                    } else {
+                        currentPhotoB64 = null;
+                        photoView.setVisibility(View.GONE);
+                        initialsView.setVisibility(View.VISIBLE);
+                        initialsView.setText(getInitials(name));
+                    }
+
+                    Toast.makeText(requireContext(), "Profile updated!", Toast.LENGTH_SHORT).show();
+                    sheet.dismiss();
+                })
+                .addOnFailureListener(e -> {
+                    if (!isAdded()) return;
+                    saveBtn.setEnabled(true);
+                    saveBtn.setText("Save Changes");
+                    Toast.makeText(requireContext(), "Failed to save — please try again",
+                            Toast.LENGTH_SHORT).show();
+                });
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private void setInitials(String name) {
+        if (!isAdded() || initialsView == null) return;
+        initialsView.setText(getInitials(name));
+        if (currentPhotoB64 == null || currentPhotoB64.isEmpty()) {
+            initialsView.setVisibility(View.VISIBLE);
+        }
+    }
+
+    private String getInitials(String name) {
+        if (name == null || name.isEmpty()) return "?";
+        String[] parts = name.trim().split("\\s+");
+        if (parts.length >= 2)
+            return ("" + parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase();
+        return name.substring(0, Math.min(2, name.length())).toUpperCase();
+    }
+
+    private void applyPhotoToView(String b64, ImageView imgView, TextView fallbackView) {
+        try {
+            byte[] bytes = Base64.decode(b64, Base64.DEFAULT);
+            Bitmap bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+            imgView.setImageBitmap(bmp);
+            imgView.setVisibility(View.VISIBLE);
+            if (fallbackView != null) fallbackView.setVisibility(View.GONE);
+        } catch (Exception ignored) {}
+    }
+
+    private Bitmap scaleBitmap(Bitmap src, int maxPx) {
+        int w = src.getWidth(), h = src.getHeight();
+        if (w <= maxPx && h <= maxPx) return src;
+        float scale = maxPx / (float) Math.max(w, h);
+        return Bitmap.createScaledBitmap(src, (int)(w * scale), (int)(h * scale), true);
+    }
+
+    // ── Path cards (unchanged logic) ──────────────────────────────────────────
 
     private void buildPathCards(LinearLayout container, List<String> langPairs,
                                 List<String> hobbies, String firstName) {
         if (!isAdded()) return;
         container.removeAllViews();
-
-        if (langPairs.isEmpty()) {
-            container.setVisibility(View.GONE);
-            return;
-        }
+        if (langPairs.isEmpty()) { container.setVisibility(View.GONE); return; }
         container.setVisibility(View.VISIBLE);
 
         LayoutInflater inflater = LayoutInflater.from(requireContext());
-        final List<String> fHobbies = hobbies;
-        final String fFirst = firstName;
 
         for (String pair : langPairs) {
             String[] parts = pair.split("\\|");
@@ -213,10 +415,12 @@ public class ProfileFragment extends Fragment {
             ChipGroup chipGroup  = card.findViewById(R.id.path_card_types);
             TextView  reasonView = card.findViewById(R.id.path_card_reason);
             reasonView.setText("Loading your path…");
-
             container.addView(card);
 
             final String fLang = lang, fLevel = level;
+            final List<String> fHobbies = hobbies;
+            final String fFirst = firstName;
+
             new Thread(() -> {
                 String[] result = fetchPathData(fLang, fLevel, fHobbies, fFirst);
                 if (!isAdded()) return;
@@ -234,9 +438,8 @@ public class ProfileFragment extends Fragment {
                         badge.setText("🔥 Trending");
                         badge.setVisibility(View.VISIBLE);
                     }
-                    for (int i = 2; i < result.length; i++) {
+                    for (int i = 2; i < result.length; i++)
                         chipGroup.addView(makeChip(result[i], CHIP_BLUE_BG, CHIP_BLUE_TEXT));
-                    }
                 });
             }).start();
         }
@@ -246,15 +449,10 @@ public class ProfileFragment extends Fragment {
         try {
             String hobbyList = hobbies.isEmpty() ? "general interests"
                     : android.text.TextUtils.join(", ", hobbies).replaceAll("[^a-zA-Z,\\s]", "").trim();
-
             String prompt =
-                    "You are an expert language learning advisor with current 2025 knowledge of job markets " +
-                            "and cultural trends. A user" + (firstName.isEmpty() ? "" : " named " + firstName) +
+                    "You are an expert language learning advisor with current 2025 knowledge. A user" +
+                            (firstName.isEmpty() ? "" : " named " + firstName) +
                             " is learning " + lang + " at " + level + " level with interests: " + hobbyList + ". " +
-                            "Based on real 2025 demand, provide:\n" +
-                            "1. A personalised 2-sentence reason mentioning their actual hobbies and current demand for " + lang + ".\n" +
-                            "2. Two to three short path labels (max 4 words each) trending for " + lang + " in their fields.\n" +
-                            "3. Whether " + lang + " is currently trending globally (true/false).\n" +
                             "Respond ONLY with valid JSON, no markdown:\n" +
                             "{\"reason\":\"...\",\"trending\":true,\"path1\":\"...\",\"path2\":\"...\",\"path3\":\"...\"}";
 
@@ -279,7 +477,6 @@ public class ProfileFragment extends Fragment {
 
             byte[] input = body.toString().getBytes(StandardCharsets.UTF_8);
             try (OutputStream os = conn.getOutputStream()) { os.write(input); }
-
             if (conn.getResponseCode() != 200) return null;
 
             Scanner scanner = new Scanner(conn.getInputStream(), StandardCharsets.UTF_8.name());
@@ -288,7 +485,8 @@ public class ProfileFragment extends Fragment {
             scanner.close();
 
             JSONObject response = new JSONObject(sb.toString());
-            String text = response.getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content").trim()
+            String text = response.getJSONArray("choices").getJSONObject(0)
+                    .getJSONObject("message").getString("content").trim()
                     .replaceAll("```json|```", "").trim();
             JSONObject parsed = new JSONObject(text);
 
@@ -300,7 +498,6 @@ public class ProfileFragment extends Fragment {
             if (parsed.has("path3") && !parsed.getString("path3").isEmpty())
                 out.add(parsed.getString("path3"));
             return out.toArray(new String[0]);
-
         } catch (Exception e) {
             Log.e(TAG, "API call failed: " + e.getMessage());
             return null;
@@ -346,6 +543,8 @@ public class ProfileFragment extends Fragment {
         return chip;
     }
 
+    // ── Delete account ────────────────────────────────────────────────────────
+
     private void showDeleteConfirmDialog() {
         new MaterialAlertDialogBuilder(requireContext())
                 .setTitle("Delete Account")
@@ -355,19 +554,10 @@ public class ProfileFragment extends Fragment {
                 .show();
     }
 
-    /**
-     * Full account wipe:
-     * 1. Re-authenticate (Firebase requires recent login before account deletion)
-     * 2. Remove all chats the user is a participant in
-     * 3. Remove users/{uid} node
-     * 4. Delete the Firebase Auth account
-     * 5. Navigate to MainActivity
-     */
     private void deleteAccount() {
         com.google.firebase.auth.FirebaseUser fbUser = FirebaseAuth.getInstance().getCurrentUser();
         if (fbUser == null) return;
 
-        // Ask for password to re-authenticate before deletion
         android.widget.EditText passwordInput = new android.widget.EditText(requireContext());
         passwordInput.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
         passwordInput.setHint("Enter your password");
@@ -381,7 +571,7 @@ public class ProfileFragment extends Fragment {
                 .setPositiveButton("Delete", (dialog, which) -> {
                     String password = passwordInput.getText().toString();
                     if (password.isEmpty()) {
-                        android.widget.Toast.makeText(requireContext(), "Password cannot be empty.", android.widget.Toast.LENGTH_SHORT).show();
+                        Toast.makeText(requireContext(), "Password cannot be empty.", Toast.LENGTH_SHORT).show();
                         return;
                     }
                     reAuthAndDelete(fbUser, password);
@@ -391,25 +581,21 @@ public class ProfileFragment extends Fragment {
     }
 
     private void reAuthAndDelete(com.google.firebase.auth.FirebaseUser fbUser, String password) {
-        com.google.android.material.button.MaterialButton deleteBtn =
-                requireView().findViewById(R.id.profile_delete_account_btn);
+        MaterialButton deleteBtn = requireView().findViewById(R.id.profile_delete_account_btn);
         deleteBtn.setEnabled(false);
         deleteBtn.setText("Deleting…");
 
         String email = fbUser.getEmail() != null ? fbUser.getEmail() : "";
-        com.google.firebase.auth.AuthCredential credential =
-                EmailAuthProvider.getCredential(email, password);
+        com.google.firebase.auth.AuthCredential credential = EmailAuthProvider.getCredential(email, password);
 
         fbUser.reauthenticate(credential).addOnCompleteListener(reAuthTask -> {
             if (!isAdded()) return;
             if (!reAuthTask.isSuccessful()) {
                 deleteBtn.setEnabled(true);
                 deleteBtn.setText("Delete Account");
-                android.widget.Toast.makeText(requireContext(),
-                        "Wrong password. Please try again.", android.widget.Toast.LENGTH_LONG).show();
+                Toast.makeText(requireContext(), "Wrong password. Please try again.", Toast.LENGTH_LONG).show();
                 return;
             }
-            // Re-auth succeeded — now wipe all data then delete Auth account
             wipeDataThenDelete(fbUser);
         });
     }
@@ -429,45 +615,35 @@ public class ProfileFragment extends Fragment {
                         }
                     }
                 }
-
-                FirebaseDatabase.getInstance()
-                        .getReference("users")
-                        .child(uid)
+                FirebaseDatabase.getInstance().getReference("users").child(uid)
                         .removeValue()
-                        .addOnCompleteListener(task -> {
-                            fbUser.delete().addOnCompleteListener(authTask -> {
-                                if (!isAdded()) return;
-                                if (!authTask.isSuccessful()) {
-                                    com.google.android.material.button.MaterialButton btn =
-                                            requireView().findViewById(R.id.profile_delete_account_btn);
-                                    btn.setEnabled(true);
-                                    btn.setText("Delete Account");
-                                    android.widget.Toast.makeText(requireContext(),
-                                            "Failed to delete account: " + (authTask.getException() != null
-                                                    ? authTask.getException().getMessage() : "unknown error"),
-                                            android.widget.Toast.LENGTH_LONG).show();
-                                    return;
-                                }
-                                Intent intent = new Intent(requireActivity(), MainActivity.class);
-                                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-                                startActivity(intent);
-                                requireActivity().overridePendingTransition(
-                                        android.R.anim.fade_in, android.R.anim.fade_out);
-                            });
-                        });
+                        .addOnCompleteListener(task -> fbUser.delete().addOnCompleteListener(authTask -> {
+                            if (!isAdded()) return;
+                            if (!authTask.isSuccessful()) {
+                                MaterialButton btn = requireView().findViewById(R.id.profile_delete_account_btn);
+                                btn.setEnabled(true);
+                                btn.setText("Delete Account");
+                                Toast.makeText(requireContext(),
+                                        "Failed to delete: " + (authTask.getException() != null
+                                                ? authTask.getException().getMessage() : "unknown"),
+                                        Toast.LENGTH_LONG).show();
+                                return;
+                            }
+                            Intent intent = new Intent(requireActivity(), MainActivity.class);
+                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                            startActivity(intent);
+                            requireActivity().overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
+                        }));
             }
 
             @Override
             public void onCancelled(@NonNull DatabaseError error) {
                 if (!isAdded()) return;
-                com.google.android.material.button.MaterialButton btn =
-                        requireView().findViewById(R.id.profile_delete_account_btn);
+                MaterialButton btn = requireView().findViewById(R.id.profile_delete_account_btn);
                 btn.setEnabled(true);
                 btn.setText("Delete Account");
-                android.widget.Toast.makeText(requireContext(),
-                        "Failed to delete account. Please try again.", android.widget.Toast.LENGTH_LONG).show();
+                Toast.makeText(requireContext(), "Failed to delete. Please try again.", Toast.LENGTH_LONG).show();
             }
         });
     }
-
 }

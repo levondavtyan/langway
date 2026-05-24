@@ -49,23 +49,70 @@
                 android:orientation="vertical"
                 android:padding="20dp">
 
-                <ImageView
-                    android:id="@+id/profile_photo"
-                    android:layout_width="72dp"
-                    android:layout_height="72dp"
-                    android:layout_marginBottom="12dp"
-                    android:background="@drawable/bg_avatar_setup_circle"
-                    android:scaleType="centerCrop"
-                    android:visibility="gone" />
-
-                <TextView
-                    android:id="@+id/profile_name"
+                <!-- Photo + edit button row -->
+                <FrameLayout
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Your Name"
-                    android:textColor="@color/text_primary"
-                    android:textSize="22sp"
-                    android:textStyle="bold" />
+                    android:layout_marginBottom="12dp">
+
+                    <!-- Initials fallback (shown when no photo) -->
+                    <TextView
+                        android:id="@+id/profile_initials"
+                        android:layout_width="72dp"
+                        android:layout_height="72dp"
+                        android:background="@drawable/bg_avatar_setup_circle"
+                        android:gravity="center"
+                        android:textColor="@color/white"
+                        android:textSize="26sp"
+                        android:textStyle="bold"
+                        android:visibility="visible" />
+
+                    <ImageView
+                        android:id="@+id/profile_photo"
+                        android:layout_width="72dp"
+                        android:layout_height="72dp"
+                        android:background="@drawable/bg_avatar_setup_circle"
+                        android:scaleType="centerCrop"
+                        android:visibility="gone" />
+
+                    <!-- Small edit badge on the photo -->
+                    <ImageView
+                        android:id="@+id/profile_photo_edit_badge"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:layout_gravity="bottom|end"
+                        android:src="@drawable/ic_edit"
+                        android:background="@drawable/bg_online_dot"
+                        android:padding="4dp"
+                        android:elevation="2dp" />
+                </FrameLayout>
+
+                <!-- Name row with inline edit icon -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        android:id="@+id/profile_name"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Your Name"
+                        android:textColor="@color/text_primary"
+                        android:textSize="22sp"
+                        android:textStyle="bold" />
+
+                    <ImageView
+                        android:id="@+id/profile_edit_btn"
+                        android:layout_width="36dp"
+                        android:layout_height="36dp"
+                        android:src="@drawable/ic_edit"
+                        android:padding="6dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="Edit profile" />
+                </LinearLayout>
 
                 <TextView
                     android:id="@+id/profile_email"

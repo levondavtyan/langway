@@ -18,7 +18,7 @@
         android:orientation="horizontal"
         android:minHeight="120dp">
 
-        <!-- Avatar panel: original shape (rounded left corners to match card) -->
+        <!-- Avatar panel -->
         <FrameLayout
             android:id="@+id/person_avatar_panel"
             android:layout_width="100dp"
@@ -42,7 +42,6 @@
                 android:layout_height="match_parent"
                 android:scaleType="centerCrop"
                 android:visibility="gone" />
-
 
         </FrameLayout>
 
@@ -100,7 +99,6 @@
                 android:maxLines="2"
                 android:ellipsize="end" />
 
-            <!-- Chips: tighter spacing and smaller vertical padding -->
             <com.google.android.material.chip.ChipGroup
                 android:id="@+id/person_hobby_chips"
                 android:layout_width="match_parent"
@@ -109,19 +107,42 @@
                 app:chipSpacing="2dp"
                 app:chipSpacingVertical="0dp" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/person_chat_btn"
-                style="@style/Widget.Langway.Button"
-                android:layout_width="wrap_content"
-                android:layout_height="32dp"
+            <!-- Two buttons side by side -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
                 android:layout_marginTop="8dp"
-                android:minHeight="0dp"
-                android:paddingStart="16dp"
-                android:paddingEnd="16dp"
-                android:text="Go to chat"
-                android:textSize="12sp"
-                android:insetTop="0dp"
-                android:insetBottom="0dp" />
+                android:gravity="start">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/person_chat_btn"
+                    style="@style/Widget.Langway.Button"
+                    android:layout_width="wrap_content"
+                    android:layout_height="32dp"
+                    android:layout_marginEnd="8dp"
+                    android:minHeight="0dp"
+                    android:paddingStart="14dp"
+                    android:paddingEnd="14dp"
+                    android:text="Go to chat"
+                    android:textSize="12sp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/person_view_profile_btn"
+                    style="@style/Widget.Langway.Button.Secondary"
+                    android:layout_width="wrap_content"
+                    android:layout_height="32dp"
+                    android:minHeight="0dp"
+                    android:paddingStart="14dp"
+                    android:paddingEnd="14dp"
+                    android:text="View profile"
+                    android:textSize="12sp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp" />
+
+            </LinearLayout>
 
         </LinearLayout>
     </LinearLayout>
