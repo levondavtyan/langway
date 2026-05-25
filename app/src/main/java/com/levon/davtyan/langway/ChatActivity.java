@@ -44,6 +44,8 @@ import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ServerValue;
 
+import com.levon.davtyan.langway.UserProfileActivity;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.text.SimpleDateFormat;
@@ -159,6 +161,23 @@ public class ChatActivity extends AppCompatActivity {
         });
 
         ((ImageButton) findViewById(R.id.chat_back_btn)).setOnClickListener(v -> finish());
+
+        // Tap name/photo area → open UserProfileActivity
+        final String fOtherUid2   = otherUidFinal;
+        final String fOtherName2  = otherName;
+        final String fOtherPhoto2 = otherPhoto;
+        findViewById(R.id.chat_profile_click_area).setOnClickListener(v -> {
+            Intent profileIntent = new Intent(ChatActivity.this, UserProfileActivity.class);
+            profileIntent.putExtra(UserProfileActivity.EXTRA_UID,       fOtherUid2);
+            profileIntent.putExtra(UserProfileActivity.EXTRA_NAME,      fOtherName2);
+            profileIntent.putExtra(UserProfileActivity.EXTRA_PHOTO,     fOtherPhoto2);
+            profileIntent.putExtra(UserProfileActivity.EXTRA_LANG_LINE, otherLangs);
+            profileIntent.putExtra(UserProfileActivity.EXTRA_MY_UID,    myUid);
+            profileIntent.putExtra(UserProfileActivity.EXTRA_MY_NAME,   myName);
+            profileIntent.putExtra(UserProfileActivity.EXTRA_MY_PHOTO,  myPhoto);
+            startActivity(profileIntent);
+        });
+
         sendBtn.setOnClickListener(v -> sendMessage());
         setupMicButton();
 
@@ -407,19 +426,57 @@ public class ChatActivity extends AppCompatActivity {
                 Long   ts     = snapshot.child("timestamp").getValue(Long.class);
                 boolean isMe  = myUid.equals(sender);
 
+                String msgKey = snapshot.getKey();
                 if ("audio".equals(type)) {
                     String audioData  = snapshot.child("audioData").getValue(String.class);
                     Long   durationMs = snapshot.child("durationMs").getValue(Long.class);
-                    addAudioBubble(audioData, durationMs != null ? durationMs : 0, isMe, ts);
+                    addAudioBubble(audioData, durationMs != null ? durationMs : 0, isMe, ts, msgKey);
+                } else if ("call_log".equals(type)) {
+                    String callType    = snapshot.child("callType").getValue(String.class);
+                    Long   startTime   = snapshot.child("startTime").getValue(Long.class);
+                    Long   endTime     = snapshot.child("endTime").getValue(Long.class);
+                    Long   durationSec = snapshot.child("durationSec").getValue(Long.class);
+                    addCallLogBubble(callType, startTime, endTime, durationSec != null ? durationSec : 0);
                 } else {
                     String text = snapshot.child("text").getValue(String.class);
-                    addTextBubble(text != null ? text : "", isMe, ts);
+                    addTextBubble(text != null ? text : "", isMe, ts, msgKey);
                 }
                 scrollView.post(() -> scrollView.fullScroll(View.FOCUS_DOWN));
             }
 
-            @Override public void onChildChanged(DataSnapshot s, String p) {}
-            @Override public void onChildRemoved(DataSnapshot s) {}
+            @Override
+            public void onChildChanged(DataSnapshot snapshot, String previousChildName) {
+                // Find the row tagged with this key and update its text
+                String key = snapshot.getKey();
+                String newText = snapshot.child("text").getValue(String.class);
+                if (key == null || newText == null) return;
+                for (int i = 0; i < messagesContainer.getChildCount(); i++) {
+                    View row = messagesContainer.getChildAt(i);
+                    if (key.equals(row.getTag())) {
+                        // Find the TextView inside the bubble
+                        View bubble = findTaggedBubble(row);
+                        if (bubble instanceof TextView) {
+                            ((TextView) bubble).setText(newText + "  ✎");
+                        }
+                        break;
+                    }
+                }
+            }
+
+            @Override
+            public void onChildRemoved(DataSnapshot snapshot) {
+                String key = snapshot.getKey();
+                if (key == null) return;
+                for (int i = 0; i < messagesContainer.getChildCount(); i++) {
+                    View row = messagesContainer.getChildAt(i);
+                    if (key.equals(row.getTag())) {
+                        View finalRow = row;
+                        finalRow.animate().alpha(0f).translationX(40f).setDuration(200)
+                                .withEndAction(() -> messagesContainer.removeView(finalRow)).start();
+                        break;
+                    }
+                }
+            }
             @Override public void onChildMoved(DataSnapshot s, String p) {}
             @Override public void onCancelled(DatabaseError error) {}
         };
@@ -427,7 +484,7 @@ public class ChatActivity extends AppCompatActivity {
     }
 
     // ── Text bubble ──────────────────────────────────────────────────────────
-    private void addTextBubble(String text, boolean isMe, Long timestampMillis) {
+    private void addTextBubble(String text, boolean isMe, Long timestampMillis, String msgKey) {
         TextView bubble = new TextView(this);
         bubble.setText(text);
         bubble.setTextSize(14f);
@@ -435,6 +492,7 @@ public class ChatActivity extends AppCompatActivity {
         bubble.setPadding(dp(12), dp(8), dp(12), dp(8));
         bubble.setLineSpacing(0, 1.3f);
         bubble.setMaxWidth(dp(260));
+        bubble.setTag("bubble"); // mark so onChildChanged can find it
 
         GradientDrawable bg = new GradientDrawable();
         bg.setColor(isMe ? MY_BUBBLE_BG : THEIR_BUBBLE_BG);
@@ -443,11 +501,18 @@ public class ChatActivity extends AppCompatActivity {
                 : new float[]{18,18, 18,18, 18,18, 4,4});
         bubble.setBackground(bg);
 
-        addToRow(bubble, isMe, timestampMillis);
+        if (isMe && msgKey != null) {
+            bubble.setOnLongClickListener(v -> {
+                showMessageMenu(bubble, text, msgKey);
+                return true;
+            });
+        }
+
+        addToRow(bubble, isMe, timestampMillis, msgKey);
     }
 
     // ── Audio bubble ─────────────────────────────────────────────────────────
-    private void addAudioBubble(String audioDataB64, long durationMs, boolean isMe, Long timestampMillis) {
+    private void addAudioBubble(String audioDataB64, long durationMs, boolean isMe, Long timestampMillis, String msgKey) {
         // Container
         LinearLayout audioBubble = new LinearLayout(this);
         audioBubble.setOrientation(LinearLayout.HORIZONTAL);
@@ -564,11 +629,65 @@ public class ChatActivity extends AppCompatActivity {
             }
         });
 
-        addToRow(audioBubble, isMe, timestampMillis);
+        addToRow(audioBubble, isMe, timestampMillis, msgKey);
+    }
+
+    // ── Call log bubble ──────────────────────────────────────────────────────
+    private void addCallLogBubble(String callType, Long startTime, Long endTime, long durationSec) {
+        boolean isVideo = "video".equals(callType);
+        String icon = isVideo ? "📹" : "📞";
+        String typeLabel = isVideo ? "Video call" : "Voice call";
+
+        java.text.SimpleDateFormat timeFmt =
+                new java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault());
+        String startStr = startTime != null ? timeFmt.format(new java.util.Date(startTime)) : "—";
+        String endStr   = endTime   != null ? timeFmt.format(new java.util.Date(endTime))   : "—";
+
+        long mins = durationSec / 60;
+        long secs = durationSec % 60;
+        String durStr = mins > 0
+                ? mins + "m " + secs + "s"
+                : secs + "s";
+
+        String label = icon + " " + typeLabel + "\n"
+                + startStr + " → " + endStr + "  ·  " + durStr;
+
+        TextView bubble = new TextView(this);
+        bubble.setText(label);
+        bubble.setTextSize(13f);
+        bubble.setTextColor(Color.parseColor("#555555"));
+        bubble.setGravity(android.view.Gravity.CENTER);
+        bubble.setPadding(dp(16), dp(10), dp(16), dp(10));
+        bubble.setLineSpacing(dp(2), 1f);
+
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Color.parseColor("#F0F0F0"));
+        bg.setCornerRadius(dp(16));
+        bg.setStroke(dp(1), Color.parseColor("#DDDDDD"));
+        bubble.setBackground(bg);
+
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        params.gravity = android.view.Gravity.CENTER_HORIZONTAL;
+        params.setMargins(dp(32), dp(8), dp(32), dp(8));
+
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(android.view.Gravity.CENTER);
+        LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        rowParams.setMargins(0, dp(4), 0, dp(4));
+        row.setLayoutParams(rowParams);
+        row.addView(bubble, params);
+
+        messagesContainer.addView(row);
+        scrollView.post(() -> scrollView.fullScroll(View.FOCUS_DOWN));
     }
 
     // ── Shared: wrap any bubble view into a timestamped, aligned row ──────────
-    private void addToRow(View bubbleView, boolean isMe, Long timestampMillis) {
+    private void addToRow(View bubbleView, boolean isMe, Long timestampMillis, String msgKey) {
         LinearLayout.LayoutParams bubbleParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT);
@@ -604,6 +723,7 @@ public class ChatActivity extends AppCompatActivity {
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT));
 
+        if (msgKey != null) row.setTag(msgKey);
         row.setAlpha(0f); row.setTranslationY(8f);
         row.animate().alpha(1f).translationY(0f)
                 .setDuration(200).setInterpolator(new DecelerateInterpolator()).start();
@@ -659,6 +779,60 @@ public class ChatActivity extends AppCompatActivity {
 
     private int dp(int val) {
         return (int)(val * getResources().getDisplayMetrics().density);
+    }
+
+    // ── Message long-press menu ───────────────────────────────────────────────
+    private void showMessageMenu(TextView bubble, String originalText, String msgKey) {
+        String[] options = {"Edit message", "Delete message"};
+        new com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+                .setItems(options, (dialog, which) -> {
+                    if (which == 0) showEditDialog(bubble, originalText, msgKey);
+                    else            deleteMessage(msgKey);
+                })
+                .show();
+    }
+
+    private void showEditDialog(TextView bubble, String originalText, String msgKey) {
+        android.widget.EditText editText = new android.widget.EditText(this);
+        editText.setText(originalText.replace("  ✎", ""));
+        editText.setSelection(editText.getText().length());
+        int pad = dp(16);
+        editText.setPadding(pad, pad, pad, pad);
+
+        new com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+                .setTitle("Edit message")
+                .setView(editText)
+                .setPositiveButton("Save", (dialog, which) -> {
+                    String newText = editText.getText().toString().trim();
+                    if (newText.isEmpty()) return;
+                    messagesRef.child(msgKey).child("text").setValue(newText);
+                    // UI updated via onChildChanged listener
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void deleteMessage(String msgKey) {
+        new com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+                .setTitle("Delete message")
+                .setMessage("Remove this message for everyone?")
+                .setPositiveButton("Delete", (dialog, which) ->
+                        messagesRef.child(msgKey).removeValue())
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    /** Walk the view tree of a row to find the view tagged "bubble" */
+    private View findTaggedBubble(View row) {
+        if ("bubble".equals(row.getTag())) return row;
+        if (row instanceof android.view.ViewGroup) {
+            android.view.ViewGroup vg = (android.view.ViewGroup) row;
+            for (int i = 0; i < vg.getChildCount(); i++) {
+                View found = findTaggedBubble(vg.getChildAt(i));
+                if (found != null) return found;
+            }
+        }
+        return null;
     }
 
     @Override
