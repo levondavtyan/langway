@@ -432,11 +432,14 @@ public class ChatActivity extends AppCompatActivity {
                     Long   durationMs = snapshot.child("durationMs").getValue(Long.class);
                     addAudioBubble(audioData, durationMs != null ? durationMs : 0, isMe, ts, msgKey);
                 } else if ("call_log".equals(type)) {
-                    String callType    = snapshot.child("callType").getValue(String.class);
-                    Long   startTime   = snapshot.child("startTime").getValue(Long.class);
-                    Long   endTime     = snapshot.child("endTime").getValue(Long.class);
-                    Long   durationSec = snapshot.child("durationSec").getValue(Long.class);
-                    addCallLogBubble(callType, startTime, endTime, durationSec != null ? durationSec : 0);
+                    String  callType    = snapshot.child("callType").getValue(String.class);
+                    Long    startTime   = snapshot.child("startTime").getValue(Long.class);
+                    Long    endTime     = snapshot.child("endTime").getValue(Long.class);
+                    Long    durationSec = snapshot.child("durationSec").getValue(Long.class);
+                    Boolean missed      = snapshot.child("missed").getValue(Boolean.class);
+                    addCallLogBubble(callType, startTime, endTime,
+                            durationSec != null ? durationSec : 0,
+                            missed != null && missed);
                 } else {
                     String text = snapshot.child("text").getValue(String.class);
                     addTextBubble(text != null ? text : "", isMe, ts, msgKey);
@@ -633,35 +636,50 @@ public class ChatActivity extends AppCompatActivity {
     }
 
     // ── Call log bubble ──────────────────────────────────────────────────────
-    private void addCallLogBubble(String callType, Long startTime, Long endTime, long durationSec) {
+    private void addCallLogBubble(String callType, Long startTime, Long endTime,
+                                  long durationSec, boolean missed) {
         boolean isVideo = "video".equals(callType);
-        String icon = isVideo ? "📹" : "📞";
-        String typeLabel = isVideo ? "Video call" : "Voice call";
 
-        java.text.SimpleDateFormat timeFmt =
-                new java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault());
-        String startStr = startTime != null ? timeFmt.format(new java.util.Date(startTime)) : "—";
-        String endStr   = endTime   != null ? timeFmt.format(new java.util.Date(endTime))   : "—";
+        String label;
+        int    bgColor;
+        int    textColor;
 
-        long mins = durationSec / 60;
-        long secs = durationSec % 60;
-        String durStr = mins > 0
-                ? mins + "m " + secs + "s"
-                : secs + "s";
-
-        String label = icon + " " + typeLabel + "\n"
-                + startStr + " → " + endStr + "  ·  " + durStr;
+        if (missed) {
+            // Missed / cancelled before answer
+            String icon = isVideo ? "📹" : "📞";
+            java.text.SimpleDateFormat timeFmt =
+                    new java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault());
+            String timeStr = startTime != null
+                    ? timeFmt.format(new java.util.Date(startTime)) : "—";
+            label     = icon + " Missed " + (isVideo ? "video call" : "call") + "  ·  " + timeStr;
+            bgColor   = Color.parseColor("#FFF3F0");
+            textColor = Color.parseColor("#CC3333");
+        } else {
+            // Completed call
+            String icon = isVideo ? "📹" : "📞";
+            String typeLabel = isVideo ? "Video call" : "Voice call";
+            java.text.SimpleDateFormat timeFmt =
+                    new java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault());
+            String startStr = startTime != null ? timeFmt.format(new java.util.Date(startTime)) : "—";
+            String endStr   = endTime   != null ? timeFmt.format(new java.util.Date(endTime))   : "—";
+            long mins = durationSec / 60;
+            long secs = durationSec % 60;
+            String durStr = mins > 0 ? mins + "m " + secs + "s" : secs + "s";
+            label     = icon + " " + typeLabel + "\n" + startStr + " → " + endStr + "  ·  " + durStr;
+            bgColor   = Color.parseColor("#F0F0F0");
+            textColor = Color.parseColor("#555555");
+        }
 
         TextView bubble = new TextView(this);
         bubble.setText(label);
         bubble.setTextSize(13f);
-        bubble.setTextColor(Color.parseColor("#555555"));
+        bubble.setTextColor(textColor);
         bubble.setGravity(android.view.Gravity.CENTER);
         bubble.setPadding(dp(16), dp(10), dp(16), dp(10));
         bubble.setLineSpacing(dp(2), 1f);
 
         GradientDrawable bg = new GradientDrawable();
-        bg.setColor(Color.parseColor("#F0F0F0"));
+        bg.setColor(bgColor);
         bg.setCornerRadius(dp(16));
         bg.setStroke(dp(1), Color.parseColor("#DDDDDD"));
         bubble.setBackground(bg);

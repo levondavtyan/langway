@@ -114,14 +114,17 @@
                 android:background="@drawable/bg_tag_green"
                 android:padding="16dp"
                 android:src="@drawable/ic_call_voice"
+                android:visibility="gone"
                 android:contentDescription="Accept" />
 
             <TextView
+                android:id="@+id/call_accept_label"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:textColor="#CCFFFFFF"
                 android:textSize="13sp"
+                android:visibility="gone"
                 android:text="Accept" />
 
         </LinearLayout>

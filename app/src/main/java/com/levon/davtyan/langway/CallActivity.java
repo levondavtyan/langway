@@ -18,17 +18,12 @@ import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ServerValue;
 import com.google.firebase.database.ValueEventListener;
 
-/**
- * CallActivity — signalling screen only (no media).
- *
- * MODE_OUTGOING: writes call to Firebase, shows "Calling…", waits for response.
- * MODE_INCOMING: shows Accept / Decline buttons.
- *
- * When the call is accepted both sides launch HMSCallActivity which handles
- * all audio/video via the 100ms SDK.
- */
+import java.util.HashMap;
+import java.util.Map;
+
 public class CallActivity extends AppCompatActivity {
 
     public static final String EXTRA_MODE         = "mode";
@@ -39,7 +34,6 @@ public class CallActivity extends AppCompatActivity {
     public static final String EXTRA_IS_VIDEO     = "is_video";
     public static final String EXTRA_MY_NAME      = "my_name";
     public static final String EXTRA_CHAT_ID      = "chat_id";
-    /** 100ms auth token — fetched by the caller and passed via Firebase signal */
     public static final String EXTRA_HMS_TOKEN    = "hms_token";
 
     public static final String MODE_OUTGOING = "outgoing";
@@ -47,13 +41,14 @@ public class CallActivity extends AppCompatActivity {
 
     private static final int CALL_TIMEOUT_MS = 45_000;
 
-    private String mode;
-    private String callId;
-    private String chatId;
+    private String  mode;
+    private String  callId;
+    private String  chatId;
     private boolean isVideo;
-    private boolean callStarted = false;
+    private boolean callStarted  = false;
+    private boolean logWritten   = false;  // guard: write missed-call log only once
 
-    private DatabaseReference callRef;
+    private DatabaseReference  callRef;
     private ValueEventListener callStateListener;
 
     private final android.os.Handler timeoutHandler =
@@ -72,12 +67,12 @@ public class CallActivity extends AppCompatActivity {
         String callerPhoto = getIntent().getStringExtra(EXTRA_CALLER_PHOTO);
         String myName      = getIntent().getStringExtra(EXTRA_MY_NAME);
 
-        TextView nameView    = findViewById(R.id.call_caller_name);
-        TextView statusView  = findViewById(R.id.call_status);
-        TextView initialsView= findViewById(R.id.call_initials);
-        ImageView photoView  = findViewById(R.id.call_photo);
-        ImageButton acceptBtn  = findViewById(R.id.call_accept_btn);
-        ImageButton declineBtn = findViewById(R.id.call_decline_btn);
+        TextView    nameView     = findViewById(R.id.call_caller_name);
+        TextView    statusView   = findViewById(R.id.call_status);
+        TextView    initialsView = findViewById(R.id.call_initials);
+        ImageView   photoView    = findViewById(R.id.call_photo);
+        ImageButton acceptBtn    = findViewById(R.id.call_accept_btn);
+        ImageButton declineBtn   = findViewById(R.id.call_decline_btn);
 
         nameView.setText(callerName != null ? callerName : "Unknown");
 
@@ -105,11 +100,12 @@ public class CallActivity extends AppCompatActivity {
             acceptBtn.setVisibility(View.GONE);
             declineBtn.setImageResource(R.drawable.ic_call_end);
             declineBtn.setOnClickListener(v -> cancelCall());
-            timeoutHandler.postDelayed(this::cancelCall, CALL_TIMEOUT_MS);
+            timeoutHandler.postDelayed(this::onCallTimedOut, CALL_TIMEOUT_MS);
             listenForCallState(myName);
         } else {
             statusView.setText(isVideo ? "Incoming video call" : "Incoming voice call");
             acceptBtn.setVisibility(View.VISIBLE);
+            findViewById(R.id.call_accept_label).setVisibility(View.VISIBLE);
             acceptBtn.setOnClickListener(v -> acceptCall(myName));
             declineBtn.setOnClickListener(v -> declineCall());
             listenForCallState(myName);
@@ -128,11 +124,14 @@ public class CallActivity extends AppCompatActivity {
                 if (MODE_OUTGOING.equals(mode)) {
                     if ("accepted".equals(state) && !callStarted) {
                         timeoutHandler.removeCallbacksAndMessages(null);
-                        launchHMSCall(myDisplayName, null);
-                    } else if ("declined".equals(state) || "cancelled".equals(state)) {
-                        Toast.makeText(CallActivity.this,
-                                "declined".equals(state) ? "Call declined" : "Call cancelled",
-                                Toast.LENGTH_SHORT).show();
+                        launchWebRTCCall(myDisplayName);
+                    } else if ("declined".equals(state)) {
+                        timeoutHandler.removeCallbacksAndMessages(null);
+                        // Recipient explicitly declined — log as missed call
+                        writeMissedCallLog();
+                        Toast.makeText(CallActivity.this, "Call declined", Toast.LENGTH_SHORT).show();
+                        cleanupAndFinish();
+                    } else if ("cancelled".equals(state)) {
                         cleanupAndFinish();
                     }
                 } else {
@@ -151,31 +150,72 @@ public class CallActivity extends AppCompatActivity {
     private void acceptCall(String myDisplayName) {
         timeoutHandler.removeCallbacksAndMessages(null);
         callRef.child("state").setValue("accepted");
-        launchHMSCall(myDisplayName, null);
+        launchWebRTCCall(myDisplayName);
     }
 
     private void declineCall() {
         timeoutHandler.removeCallbacksAndMessages(null);
         callRef.child("state").setValue("declined");
         cleanupAndFinish();
+        // Recipient declined — don't write log here; caller's side writes it on "declined" state
     }
 
     private void cancelCall() {
         timeoutHandler.removeCallbacksAndMessages(null);
+        // Caller hung up before answer — log as missed call, then signal
+        writeMissedCallLog();
         callRef.child("state").setValue("cancelled");
         cleanupAndFinish();
     }
 
-    private void launchHMSCall(String myDisplayName, String hmsToken) {
+    private void onCallTimedOut() {
+        // Rang for 45s with no answer — log as missed, signal cancelled
+        writeMissedCallLog();
+        callRef.child("state").setValue("cancelled");
+        cleanupAndFinish();
+    }
+
+    /**
+     * Writes a "missed call" entry into the chat. Only the caller writes this,
+     * and only once (guarded by logWritten flag).
+     */
+    private void writeMissedCallLog() {
+        if (logWritten) return;
+        if (chatId == null || chatId.isEmpty()) return;
+        if (!MODE_OUTGOING.equals(mode)) return; // only caller writes the log
+        logWritten = true;
+
+        long now = System.currentTimeMillis();
+        Map<String, Object> logMsg = new HashMap<>();
+        logMsg.put("type",        "call_log");
+        logMsg.put("callType",    isVideo ? "video" : "voice");
+        logMsg.put("missed",      true);
+        logMsg.put("startTime",   now);
+        logMsg.put("endTime",     now);
+        logMsg.put("durationSec", 0L);
+        logMsg.put("timestamp",   now);
+
+        FirebaseDatabase.getInstance()
+                .getReference("chats").child(chatId)
+                .child("messages").push().setValue(logMsg);
+
+        Map<String, Object> preview = new HashMap<>();
+        preview.put("lastMessage",   isVideo ? "📹 Missed video call" : "📞 Missed call");
+        preview.put("lastTimestamp", ServerValue.TIMESTAMP);
+        FirebaseDatabase.getInstance()
+                .getReference("chats").child(chatId).updateChildren(preview);
+    }
+
+    private void launchWebRTCCall(String myDisplayName) {
         if (callStarted) return;
         callStarted = true;
 
         Intent intent = new Intent(this, WebRTCCallActivity.class);
-        intent.putExtra(WebRTCCallActivity.EXTRA_CALL_ID, callId);
+        intent.putExtra(WebRTCCallActivity.EXTRA_CALL_ID,   callId);
+        intent.putExtra(WebRTCCallActivity.EXTRA_CHAT_ID,   chatId);
         intent.putExtra(WebRTCCallActivity.EXTRA_USER_NAME, myDisplayName);
-        intent.putExtra(WebRTCCallActivity.EXTRA_IS_VIDEO, isVideo);
-        intent.putExtra(WebRTCCallActivity.EXTRA_IS_CALLER,
-                MODE_OUTGOING.equals(mode));
+        intent.putExtra(WebRTCCallActivity.EXTRA_IS_VIDEO,  isVideo);
+        intent.putExtra(WebRTCCallActivity.EXTRA_IS_CALLER, MODE_OUTGOING.equals(mode));
         startActivity(intent);
 
         callRef.child("state").setValue("active");

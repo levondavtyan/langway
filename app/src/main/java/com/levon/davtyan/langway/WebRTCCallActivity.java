@@ -17,6 +17,7 @@ import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ServerValue;
 import com.google.firebase.database.ValueEventListener;
 
 import org.json.JSONException;
@@ -42,23 +43,14 @@ import org.webrtc.VideoSource;
 import org.webrtc.VideoTrack;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
-/**
- * WebRTCCallActivity — peer-to-peer audio/video call.
- *
- * Uses Google's WebRTC library (stream-webrtc-android) for media and
- * Firebase Realtime Database as the signalling channel.
- * No third-party account or API key required.
- *
- * Signalling path:  /webrtc_signals/{callId}/
- *   offer       → SDP offer  (written by caller)
- *   answer      → SDP answer (written by callee)
- *   candidates/ → ICE candidates from both sides
- */
 public class WebRTCCallActivity extends AppCompatActivity {
 
     public static final String EXTRA_CALL_ID   = "call_id";
+    public static final String EXTRA_CHAT_ID   = "chat_id";
     public static final String EXTRA_USER_NAME = "user_name";
     public static final String EXTRA_IS_VIDEO  = "is_video";
     public static final String EXTRA_IS_CALLER = "is_caller";
@@ -66,29 +58,30 @@ public class WebRTCCallActivity extends AppCompatActivity {
     private static final int REQUEST_PERMS = 404;
 
     // ── WebRTC ────────────────────────────────────────────────────────────────
-    private EglBase eglBase;
+    private EglBase               eglBase;
     private PeerConnectionFactory factory;
-    private PeerConnection peerConnection;
-    private VideoTrack localVideoTrack;
-    private AudioTrack localAudioTrack;
-    private VideoCapturer videoCapturer;
-    private VideoSource videoSource;
-    private SurfaceViewRenderer localRenderer;
-    private SurfaceViewRenderer remoteRenderer;
+    private PeerConnection        peerConnection;
+    private VideoTrack            localVideoTrack;
+    private AudioTrack            localAudioTrack;
+    private VideoCapturer         videoCapturer;
+    private VideoSource           videoSource;
+    private SurfaceViewRenderer   localRenderer;
+    private SurfaceViewRenderer   remoteRenderer;
 
     // ── State ─────────────────────────────────────────────────────────────────
     private boolean isVideo;
     private boolean isCaller;
-    private String callId;
+    private String  callId;
+    private String  chatId;
     private boolean micMuted    = false;
     private boolean cameraMuted = false;
+    private long    callStartTime;
 
-    // ── Firebase signalling ───────────────────────────────────────────────────
-    private DatabaseReference signalRef;
+    // ── Firebase ──────────────────────────────────────────────────────────────
+    private DatabaseReference  signalRef;
     private ValueEventListener answerListener;
     private ValueEventListener candidateListener;
 
-    // Free STUN servers — no account needed
     private static final List<PeerConnection.IceServer> ICE_SERVERS = new ArrayList<>();
     static {
         ICE_SERVERS.add(PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer());
@@ -102,12 +95,14 @@ public class WebRTCCallActivity extends AppCompatActivity {
         setContentView(R.layout.activity_webrtc_call);
 
         callId   = getIntent().getStringExtra(EXTRA_CALL_ID);
+        chatId   = getIntent().getStringExtra(EXTRA_CHAT_ID);
         isVideo  = getIntent().getBooleanExtra(EXTRA_IS_VIDEO, false);
         isCaller = getIntent().getBooleanExtra(EXTRA_IS_CALLER, true);
+        callStartTime = System.currentTimeMillis();
 
         localRenderer  = findViewById(R.id.webrtc_local_video);
         remoteRenderer = findViewById(R.id.webrtc_remote_video);
-        TextView statusText = findViewById(R.id.webrtc_status);
+        TextView    statusText = findViewById(R.id.webrtc_status);
         ImageButton btnMic    = findViewById(R.id.webrtc_btn_mic);
         ImageButton btnCamera = findViewById(R.id.webrtc_btn_camera);
         ImageButton btnEnd    = findViewById(R.id.webrtc_btn_end);
@@ -130,41 +125,32 @@ public class WebRTCCallActivity extends AppCompatActivity {
                 : new String[]{Manifest.permission.RECORD_AUDIO};
 
         boolean allGranted = true;
-        for (String p : perms) {
+        for (String p : perms)
             if (ContextCompat.checkSelfPermission(this, p) != PackageManager.PERMISSION_GRANTED) {
-                allGranted = false;
-                break;
+                allGranted = false; break;
             }
-        }
 
-        if (allGranted) {
-            startWebRTC();
-        } else {
-            ActivityCompat.requestPermissions(this, perms, REQUEST_PERMS);
-        }
+        if (allGranted) startWebRTC();
+        else ActivityCompat.requestPermissions(this, perms, REQUEST_PERMS);
     }
 
     // ── WebRTC init ───────────────────────────────────────────────────────────
 
     private void startWebRTC() {
         eglBase = EglBase.create();
-
         localRenderer.init(eglBase.getEglBaseContext(), null);
         localRenderer.setMirror(true);
         remoteRenderer.init(eglBase.getEglBaseContext(), null);
 
-        PeerConnectionFactory.InitializationOptions initOpts =
-                PeerConnectionFactory.InitializationOptions.builder(getApplicationContext())
-                        .createInitializationOptions();
-        PeerConnectionFactory.initialize(initOpts);
+        PeerConnectionFactory.initialize(
+                PeerConnectionFactory.InitializationOptions
+                        .builder(getApplicationContext())
+                        .createInitializationOptions());
 
-        PeerConnectionFactory.Options options = new PeerConnectionFactory.Options();
         factory = PeerConnectionFactory.builder()
-                .setOptions(options)
-                .setVideoEncoderFactory(new DefaultVideoEncoderFactory(
-                        eglBase.getEglBaseContext(), true, true))
-                .setVideoDecoderFactory(new DefaultVideoDecoderFactory(
-                        eglBase.getEglBaseContext()))
+                .setOptions(new PeerConnectionFactory.Options())
+                .setVideoEncoderFactory(new DefaultVideoEncoderFactory(eglBase.getEglBaseContext(), true, true))
+                .setVideoDecoderFactory(new DefaultVideoDecoderFactory(eglBase.getEglBaseContext()))
                 .createPeerConnectionFactory();
 
         PeerConnection.RTCConfiguration rtcConfig =
@@ -174,7 +160,6 @@ public class WebRTCCallActivity extends AppCompatActivity {
         peerConnection = factory.createPeerConnection(rtcConfig, new PeerConnection.Observer() {
             @Override
             public void onIceCandidate(IceCandidate candidate) {
-                // Send our ICE candidate to the other peer via Firebase
                 try {
                     JSONObject json = new JSONObject();
                     json.put("sdpMid", candidate.sdpMid);
@@ -185,22 +170,18 @@ public class WebRTCCallActivity extends AppCompatActivity {
                 } catch (JSONException e) { e.printStackTrace(); }
             }
 
-            // @Override
             public void onTrack(RtpReceiver receiver, MediaStream[] streams) {
-                // Remote video arrived
                 if (receiver.track() instanceof VideoTrack) {
                     VideoTrack remoteVideo = (VideoTrack) receiver.track();
                     runOnUiThread(() -> remoteVideo.addSink(remoteRenderer));
                 }
             }
-
             @Override public void onSignalingChange(PeerConnection.SignalingState s) {}
             @Override public void onIceConnectionChange(PeerConnection.IceConnectionState s) {
                 runOnUiThread(() -> {
                     if (s == PeerConnection.IceConnectionState.DISCONNECTED ||
                             s == PeerConnection.IceConnectionState.FAILED) {
-                        Toast.makeText(WebRTCCallActivity.this,
-                                "Connection lost", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(WebRTCCallActivity.this, "Connection lost", Toast.LENGTH_SHORT).show();
                         hangUp();
                     }
                 });
@@ -214,43 +195,34 @@ public class WebRTCCallActivity extends AppCompatActivity {
             @Override public void onRenegotiationNeeded() {}
         });
 
-        // Add local audio
         MediaConstraints audioConstraints = new MediaConstraints();
         AudioSource audioSource = factory.createAudioSource(audioConstraints);
         localAudioTrack = factory.createAudioTrack("audio0", audioSource);
         peerConnection.addTrack(localAudioTrack);
 
-        // Add local video if needed
         if (isVideo) {
-            SurfaceTextureHelper surfaceHelper = SurfaceTextureHelper.create(
-                    "CaptureThread", eglBase.getEglBaseContext());
+            SurfaceTextureHelper surfaceHelper =
+                    SurfaceTextureHelper.create("CaptureThread", eglBase.getEglBaseContext());
             videoCapturer = createCameraCapturer();
             videoSource = factory.createVideoSource(videoCapturer.isScreencast());
-            videoCapturer.initialize(surfaceHelper, getApplicationContext(),
-                    videoSource.getCapturerObserver());
+            videoCapturer.initialize(surfaceHelper, getApplicationContext(), videoSource.getCapturerObserver());
             videoCapturer.startCapture(1280, 720, 30);
             localVideoTrack = factory.createVideoTrack("video0", videoSource);
             localVideoTrack.addSink(localRenderer);
             peerConnection.addTrack(localVideoTrack);
         }
 
-        if (isCaller) {
-            createOffer();
-        } else {
-            listenForOffer();
-        }
-
+        if (isCaller) createOffer();
+        else listenForOffer();
         listenForRemoteCandidates();
     }
 
-    // ── Signalling ─────────────────────────────────────────────────────────────
+    // ── Signalling ────────────────────────────────────────────────────────────
 
     private void createOffer() {
-        MediaConstraints constraints = new MediaConstraints();
-        constraints.mandatory.add(new MediaConstraints.KeyValuePair("OfferToReceiveAudio", "true"));
-        if (isVideo)
-            constraints.mandatory.add(new MediaConstraints.KeyValuePair("OfferToReceiveVideo", "true"));
-
+        MediaConstraints c = new MediaConstraints();
+        c.mandatory.add(new MediaConstraints.KeyValuePair("OfferToReceiveAudio", "true"));
+        if (isVideo) c.mandatory.add(new MediaConstraints.KeyValuePair("OfferToReceiveVideo", "true"));
         peerConnection.createOffer(new SimpleSdpObserver() {
             @Override public void onCreateSuccess(SessionDescription sdp) {
                 peerConnection.setLocalDescription(new SimpleSdpObserver(), sdp);
@@ -262,7 +234,7 @@ public class WebRTCCallActivity extends AppCompatActivity {
                 } catch (JSONException e) { e.printStackTrace(); }
                 listenForAnswer();
             }
-        }, constraints);
+        }, c);
     }
 
     private void listenForOffer() {
@@ -272,10 +244,10 @@ public class WebRTCCallActivity extends AppCompatActivity {
                 if (raw == null) return;
                 try {
                     JSONObject json = new JSONObject(raw);
-                    SessionDescription offer = new SessionDescription(
-                            SessionDescription.Type.fromCanonicalForm(json.getString("type")),
-                            json.getString("sdp"));
-                    peerConnection.setRemoteDescription(new SimpleSdpObserver(), offer);
+                    peerConnection.setRemoteDescription(new SimpleSdpObserver(),
+                            new SessionDescription(
+                                    SessionDescription.Type.fromCanonicalForm(json.getString("type")),
+                                    json.getString("sdp")));
                     createAnswer();
                 } catch (JSONException e) { e.printStackTrace(); }
             }
@@ -284,11 +256,9 @@ public class WebRTCCallActivity extends AppCompatActivity {
     }
 
     private void createAnswer() {
-        MediaConstraints constraints = new MediaConstraints();
-        constraints.mandatory.add(new MediaConstraints.KeyValuePair("OfferToReceiveAudio", "true"));
-        if (isVideo)
-            constraints.mandatory.add(new MediaConstraints.KeyValuePair("OfferToReceiveVideo", "true"));
-
+        MediaConstraints c = new MediaConstraints();
+        c.mandatory.add(new MediaConstraints.KeyValuePair("OfferToReceiveAudio", "true"));
+        if (isVideo) c.mandatory.add(new MediaConstraints.KeyValuePair("OfferToReceiveVideo", "true"));
         peerConnection.createAnswer(new SimpleSdpObserver() {
             @Override public void onCreateSuccess(SessionDescription sdp) {
                 peerConnection.setLocalDescription(new SimpleSdpObserver(), sdp);
@@ -299,7 +269,7 @@ public class WebRTCCallActivity extends AppCompatActivity {
                     signalRef.child("answer").setValue(json.toString());
                 } catch (JSONException e) { e.printStackTrace(); }
             }
-        }, constraints);
+        }, c);
     }
 
     private void listenForAnswer() {
@@ -309,10 +279,10 @@ public class WebRTCCallActivity extends AppCompatActivity {
                 if (raw == null) return;
                 try {
                     JSONObject json = new JSONObject(raw);
-                    SessionDescription answer = new SessionDescription(
-                            SessionDescription.Type.fromCanonicalForm(json.getString("type")),
-                            json.getString("sdp"));
-                    peerConnection.setRemoteDescription(new SimpleSdpObserver(), answer);
+                    peerConnection.setRemoteDescription(new SimpleSdpObserver(),
+                            new SessionDescription(
+                                    SessionDescription.Type.fromCanonicalForm(json.getString("type")),
+                                    json.getString("sdp")));
                 } catch (JSONException e) { e.printStackTrace(); }
             }
             @Override public void onCancelled(@NonNull DatabaseError error) {}
@@ -321,7 +291,6 @@ public class WebRTCCallActivity extends AppCompatActivity {
     }
 
     private void listenForRemoteCandidates() {
-        // Listen to the OTHER side's candidates
         String remoteSide = isCaller ? "callee_candidates" : "caller_candidates";
         candidateListener = new ValueEventListener() {
             @Override public void onDataChange(@NonNull DataSnapshot snapshot) {
@@ -330,11 +299,10 @@ public class WebRTCCallActivity extends AppCompatActivity {
                     if (raw == null) continue;
                     try {
                         JSONObject json = new JSONObject(raw);
-                        IceCandidate candidate = new IceCandidate(
+                        peerConnection.addIceCandidate(new IceCandidate(
                                 json.getString("sdpMid"),
                                 json.getInt("sdpMLineIndex"),
-                                json.getString("sdp"));
-                        peerConnection.addIceCandidate(candidate);
+                                json.getString("sdp")));
                     } catch (JSONException e) { e.printStackTrace(); }
                 }
             }
@@ -358,7 +326,32 @@ public class WebRTCCallActivity extends AppCompatActivity {
     }
 
     private void hangUp() {
+        long endTime    = System.currentTimeMillis();
+        long durationSec = (endTime - callStartTime) / 1000;
+
         signalRef.child("state").setValue("ended");
+
+        // Write call log message into the chat so both sides see it
+        if (chatId != null && !chatId.isEmpty()) {
+            Map<String, Object> logMsg = new HashMap<>();
+            logMsg.put("type",        "call_log");
+            logMsg.put("callType",    isVideo ? "video" : "voice");
+            logMsg.put("startTime",   callStartTime);
+            logMsg.put("endTime",     endTime);
+            logMsg.put("durationSec", durationSec);
+            logMsg.put("timestamp",   endTime);
+            FirebaseDatabase.getInstance()
+                    .getReference("chats").child(chatId)
+                    .child("messages").push().setValue(logMsg);
+
+            // Update chat preview
+            Map<String, Object> preview = new HashMap<>();
+            preview.put("lastMessage",   isVideo ? "📹 Video call" : "📞 Voice call");
+            preview.put("lastTimestamp", ServerValue.TIMESTAMP);
+            FirebaseDatabase.getInstance()
+                    .getReference("chats").child(chatId).updateChildren(preview);
+        }
+
         cleanup();
         finish();
     }
@@ -374,23 +367,19 @@ public class WebRTCCallActivity extends AppCompatActivity {
             try { videoCapturer.stopCapture(); } catch (InterruptedException ignored) {}
             videoCapturer.dispose();
         }
-        if (localRenderer != null)  localRenderer.release();
+        if (localRenderer  != null) localRenderer.release();
         if (remoteRenderer != null) remoteRenderer.release();
         if (peerConnection != null) { peerConnection.close(); peerConnection = null; }
-        if (factory != null)        { factory.dispose(); factory = null; }
-        if (eglBase != null)        { eglBase.release(); eglBase = null; }
+        if (factory        != null) { factory.dispose(); factory = null; }
+        if (eglBase        != null) { eglBase.release(); eglBase = null; }
     }
 
     private VideoCapturer createCameraCapturer() {
         Camera2Enumerator enumerator = new Camera2Enumerator(this);
-        // Prefer front camera
-        for (String name : enumerator.getDeviceNames()) {
-            if (enumerator.isFrontFacing(name))
-                return enumerator.createCapturer(name, null);
-        }
-        for (String name : enumerator.getDeviceNames()) {
+        for (String name : enumerator.getDeviceNames())
+            if (enumerator.isFrontFacing(name)) return enumerator.createCapturer(name, null);
+        for (String name : enumerator.getDeviceNames())
             return enumerator.createCapturer(name, null);
-        }
         return null;
     }
 
@@ -403,10 +392,7 @@ public class WebRTCCallActivity extends AppCompatActivity {
             boolean ok = true;
             for (int r : grantResults) if (r != PackageManager.PERMISSION_GRANTED) { ok = false; break; }
             if (ok) startWebRTC();
-            else {
-                Toast.makeText(this, "Permission required for calls", Toast.LENGTH_LONG).show();
-                finish();
-            }
+            else { Toast.makeText(this, "Permission required for calls", Toast.LENGTH_LONG).show(); finish(); }
         }
     }
 
@@ -416,7 +402,6 @@ public class WebRTCCallActivity extends AppCompatActivity {
         cleanup();
     }
 
-    // ── Minimal SDP observer (avoids boilerplate in each call) ────────────────
     private static class SimpleSdpObserver implements org.webrtc.SdpObserver {
         @Override public void onCreateSuccess(SessionDescription sdp) {}
         @Override public void onSetSuccess() {}
