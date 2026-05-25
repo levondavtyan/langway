@@ -29,6 +29,7 @@ import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ServerValue;
 import com.google.firebase.database.ValueEventListener;
 import com.levon.davtyan.langway.ChatActivity;
+import com.levon.davtyan.langway.UserProfileActivity;
 import com.levon.davtyan.langway.R;
 
 import java.util.ArrayList;
@@ -179,7 +180,8 @@ public class DiscoverFragment extends Fragment {
 
                             if (hasMatch(data)) allMatches.add(data);
                         }
-                        enrichLastSeenFromChats();
+                        buildFilters();
+                        renderCards(allMatches);
                     }
                     @Override public void onCancelled(@NonNull DatabaseError error) {
                         if (isAdded()) showEmpty();
@@ -466,7 +468,7 @@ public class DiscoverFragment extends Fragment {
             intent.putExtra(UserProfileActivity.EXTRA_MY_UID,    myUid);
             intent.putExtra(UserProfileActivity.EXTRA_MY_NAME,   myName);
             intent.putExtra(UserProfileActivity.EXTRA_MY_PHOTO,  myPhoto);
-            startActivity(intent);
+            requireActivity().startActivity(intent);
         });
 
         card.setAlpha(0f); card.setTranslationY(20f);
@@ -510,7 +512,7 @@ public class DiscoverFragment extends Fragment {
                     intent.putExtra(ChatActivity.EXTRA_OTHER_NAME,  otherName);
                     intent.putExtra(ChatActivity.EXTRA_OTHER_LANGS, otherLangs);
                     intent.putExtra(ChatActivity.EXTRA_OTHER_PHOTO, otherPhoto);
-                    startActivity(intent);
+                    if (isAdded()) requireActivity().startActivity(intent);
                 });
     }
 

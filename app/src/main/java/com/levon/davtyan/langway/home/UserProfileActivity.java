@@ -1,4 +1,4 @@
-package com.levon.davtyan.langway.home;
+package com.levon.davtyan.langway;
 
 import android.content.Intent;
 import android.graphics.Bitmap;
@@ -6,24 +6,28 @@ import android.graphics.BitmapFactory;
 import android.os.Bundle;
 import android.util.Base64;
 import android.view.View;
-import android.widget.ImageButton;
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
+import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ServerValue;
-import com.levon.davtyan.langway.ChatActivity;
-import com.levon.davtyan.langway.R;
+import com.google.firebase.database.ValueEventListener;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class UserProfileActivity extends AppCompatActivity {
@@ -63,7 +67,7 @@ public class UserProfileActivity extends AppCompatActivity {
         String myName    = getIntent().getStringExtra(EXTRA_MY_NAME);
         String myPhoto   = getIntent().getStringExtra(EXTRA_MY_PHOTO);
 
-        ImageButton backBtn          = findViewById(R.id.user_profile_back_btn);
+        FloatingActionButton backBtn = findViewById(R.id.user_profile_back_btn);
         TextView    nameView         = findViewById(R.id.user_profile_name);
         TextView    bioView          = findViewById(R.id.user_profile_bio);
         TextView    initialsView     = findViewById(R.id.user_profile_initials);

@@ -59,7 +59,7 @@
 
         <!-- Other user's profile view -->
         <activity
-            android:name=".home.UserProfileActivity"
+            android:name=".UserProfileActivity"
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />
 
