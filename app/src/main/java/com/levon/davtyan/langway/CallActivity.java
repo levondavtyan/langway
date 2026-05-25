@@ -29,12 +29,10 @@ public class CallActivity extends AppCompatActivity {
     public static final String EXTRA_MODE         = "mode";
     public static final String EXTRA_CALL_ID      = "call_id";
     public static final String EXTRA_CALLER_NAME  = "caller_name";
-    public static final String EXTRA_CALLER_UID   = "caller_uid";
     public static final String EXTRA_CALLER_PHOTO = "caller_photo";
     public static final String EXTRA_IS_VIDEO     = "is_video";
     public static final String EXTRA_MY_NAME      = "my_name";
     public static final String EXTRA_CHAT_ID      = "chat_id";
-    public static final String EXTRA_HMS_TOKEN    = "hms_token";
 
     public static final String MODE_OUTGOING = "outgoing";
     public static final String MODE_INCOMING = "incoming";
