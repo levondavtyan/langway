@@ -154,8 +154,8 @@ public class DiscoverFragment extends Fragment {
                         for (DataSnapshot userSnap : snapshot.getChildren()) {
                             String uid = userSnap.getKey();
                             if (myUid.equals(uid)) continue;
-                            String userEmail = strSnap(userSnap, "email", "");
-                            if (userEmail.isEmpty()) continue;
+//                            String userEmail = strSnap(userSnap, "email", "");
+//                            if (userEmail.isEmpty()) continue;
 
                             Map<String, Object> data = new HashMap<>();
                             data.put("_uid",        uid);
@@ -188,6 +188,49 @@ public class DiscoverFragment extends Fragment {
                     }
                 });
     }
+
+//    private void loadMatchingUsers() {
+//        Log.d("DISCOVER", "loadMatchingUsers called, myUid=" + myUid);
+//        Log.d("DISCOVER", "myLangKeys=" + myLangKeys);
+//        Log.d("DISCOVER", "myHobbyKeys=" + myHobbyKeys);
+//
+//        FirebaseDatabase.getInstance().getReference("users")
+//                .addListenerForSingleValueEvent(new ValueEventListener() {
+//                    @Override
+//                    public void onDataChange(@NonNull DataSnapshot snapshot) {
+//                        Log.d("DISCOVER", "Got snapshot, children count=" + snapshot.getChildrenCount());
+//                        allMatches.clear();
+//                        for (DataSnapshot userSnap : snapshot.getChildren()) {
+//                            String uid = userSnap.getKey();
+//                            Log.d("DISCOVER", "Checking user uid=" + uid);
+//                            Log.d("DISCOVER", "  languages=" + userSnap.child("languages").getValue());
+//                            Log.d("DISCOVER", "  hobbies=" + userSnap.child("hobbies").getValue());
+//                            if (myUid.equals(uid)) { Log.d("DISCOVER", "  -> skipped (self)"); continue; }
+//                            boolean match = hasMatch(/* temp */ buildTempMap(userSnap));
+//                            Log.d("DISCOVER", "  -> hasMatch=" + match);
+//                        }
+//                        // ... rest of your code
+//                    }
+//                    @Override public void onCancelled(@NonNull DatabaseError error) {
+//                        Log.e("DISCOVER", "DB error: " + error.getMessage());
+//                    }
+//                });
+//    }
+//
+//    private Map<String, Object> buildTempMap(DataSnapshot userSnap) {
+//        Map<String, String> langsMap = new HashMap<>();
+//        for (DataSnapshot e : userSnap.child("languages").getChildren())
+//            if (e.getKey() != null) langsMap.put(e.getKey(), e.getValue(String.class));
+//        List<String> hobbiesList = new ArrayList<>();
+//        for (DataSnapshot h : userSnap.child("hobbies").getChildren()) {
+//            String val = h.getValue(String.class);
+//            if (val != null) hobbiesList.add(val);
+//        }
+//        Map<String, Object> data = new HashMap<>();
+//        data.put("languages", langsMap);
+//        data.put("hobbies", hobbiesList);
+//        return data;
+//    }
 
     private void enrichLastSeenFromChats() {
         List<String> needsEnrich = new ArrayList<>();
